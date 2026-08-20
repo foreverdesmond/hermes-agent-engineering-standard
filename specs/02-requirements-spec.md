@@ -6,7 +6,7 @@
 > Prerequisite gate: the Background & Current-State Analysis has been approved
 > Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
 > Originally finalized: 2026-08-11
-> Revised: 2026-08-20
+> Revised: 2026-08-21
 > Reviewer: Richy (approved)
 
 ## 1. Document Goal
@@ -334,3 +334,4 @@ The requirements document may be marked "Approved" and used as the detailed-desi
 | V2.3 | 2026-08-11 | — | V2.3 approved baseline |
 | V2.5 | 2026-08-20 | WorkBuddy | §6 title "Codex execution requirements" changed to "Execution-Agent (WorkBuddy/Codex) execution requirements," removing single-point binding |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+| V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |

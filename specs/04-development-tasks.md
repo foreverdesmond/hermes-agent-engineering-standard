@@ -6,7 +6,7 @@
 > Prerequisite gate: applicable requirements and detailed design have been approved; exploration tasks excepted
 > Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
 > Originally finalized: 2026-08-11
-> Revised: 2026-08-20
+> Revised: 2026-08-21
 > Reviewer: Richy (approved)
 
 ## 1. Single Responsibility
@@ -453,3 +453,4 @@ Development tasks may start only when the track selection is reasonable, task bo
 | V2.5 | 2026-08-20 | WorkBuddy | §4 removed shared-JSON trio, added LedgerLocation/DispatchMode; §8 rewritten to Hermes-ledger state surface; §9 removed shared-JSON polling/Codex subtask; §11 four-tier enum; §13 review checklist removed short-term lock/Codex |
 | V2.5 (pending review) | 2026-08-20 | Hermes | §5.2 added dependency-graph cycle detection (reject registration and escalate Richy); §10 added Context L2 generation trigger (when ContextL2Policy=Required, first dispatch Doc/Design Reviewer to generate L2, consistent with 09 §3.2) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+| V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |

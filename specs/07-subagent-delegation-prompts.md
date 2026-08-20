@@ -4,7 +4,7 @@
 > Document status: Approved (V2.5 final baseline)
 > Applicability: using agents to perform development, Review, testing, scheduling, or merge review
 > Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
-> Revised: 2026-08-20
+> Revised: 2026-08-21
 > Reviewer: Richy (approved)
 
 ## 1. Single Responsibility
@@ -79,7 +79,7 @@ Contains only:
 - Reviewer forms an independent risk model first, then reads the development context package;
 - SOLID, test proof boundary, and independent risk assumptions;
 - Must not directly modify code or update final task state unless an explicit role change is authorized.
-- `TaskBranch`, `CodeBaseSHA`, `HeadSHA`, and precise `CodeBaseSHA..HeadSHA`; Review must not change the current main workspace or other branches under review.
+- `TaskBranch`, `CodeBaseSHA`, `HeadSHA`, and precise `CodeBaseSHA..HeadSHA`; Review must not change the current main workspace or other branches.
 - Structured `CodingReviewResult` event header separating `ExecutionStatus` and `Verdict`.
 
 ### 3.4 Candidate-Version-Role Increment
@@ -194,7 +194,7 @@ Before dispatching any task, the following must be checked:
 
 Dispatch is forbidden when any required item is missing or conflicts are unresolved.
 
-### 8.2 State Production, Consumption, and Periodic Reconciliation
+### 8.2 State Production, Consumption, and Reconciliation
 
 Standard scheduling loop:
 
@@ -264,3 +264,4 @@ Agent delegation may start only when the project has selected the minimal necess
 | V2.5 | 2026-08-20 | Hermes | Review revision: §2 role list consolidated to 6 core roles, extended roles merged into mapping notes |
 | V2.5 (pending review) | 2026-08-20 | Hermes | §8.2 synced IntegrationVerified execution subject = Integrator (or independent IntegrationValidationTask), not depending on external CI webhook (consistent with 09 §6.1 / 08 §3.4) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+| V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |

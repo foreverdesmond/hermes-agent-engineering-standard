@@ -4,7 +4,7 @@
 > Document status: Approved (V2.5 final baseline)
 > Applicability: development iterations led by the resident Coordinator (Hermes), with WorkBuddy / Codex / Human collaborating in parallel
 > Predecessor: `09-Scheduling Control Plane & Runtime Ledger Spec` (V2.4, Codex thread as Coordinator)
-> Revised: 2026-08-20
+> Revised: 2026-08-21
 > Foundation: *Hermes Capability Boundary List* (measured capability), *Hermes Process & Boundary Resolution* (boundary decisions)
 > Author: WorkBuddy (rewrite)
 > Reviewer: Richy (approved)
@@ -51,7 +51,7 @@ Describes the running state of the execution carrier, not the development-task c
 | Running | Running or still resumable |
 | Idle | No current activity; a consumable final may already exist |
 | NeedsAttention | Requests input, authorization, or a recoverable exception occurs |
-| Completed | Execution ended; a pending-consumption signal must be read before judging the task conclusion |
+| Completed | Execution ended; the final must be read on a pending-consumption signal before judging the task conclusion |
 | Unavailable | Currently unreadable or the execution carrier is lost |
 | Cancelled | The execution carrier has been explicitly cancelled |
 
@@ -290,7 +290,7 @@ Test-responsibility layering (prevent token waste, per *Hermes Process & Boundar
 - The Reviewer reviews on diff + L0 evidence, only smoke-tests key paths, **does not re-run the full unit suite**;
 - Level 1 + regression is run once by the Validator only before merge, full-suite.
 
-## 11. cron Reconciliation (Periodic Reconciliation)
+## 11. cron Reconciliation
 
 Hermes cron (~1 minute) reconciliation each round:
 
@@ -363,7 +363,7 @@ Recovery must record `Resumed`, and first perform unconsumed-event reconciliatio
 
 ### 13.2 Cold Recovery Steps
 
-1. Read the ledger; if missing or corrupted, recover the plan graph, roles, dependencies, baselines, stable state, and unconsumed records from the last structurally-valid `TASK-STATE-EXCHANGE` snapshot in `CanonicalTaskDocumentPath`;
+1. Read the ledger; if missing or corrupted, recover the task graph, roles, dependencies, baselines, stable state, and unconsumed records from the last structurally-valid `TASK-STATE-EXCHANGE` snapshot in `CanonicalTaskDocumentPath`;
 2. Scan Git branches, worktrees, commits, ancestry, and iteration-branch inclusion;
 3. Only for stages recorded as `PendingConsumption`, `PendingVerification`, or missing evidence, discover the execution carrier by its `ExecutionRef`;
 4. Only read the above target task history; forbid re-implementing cold recovery as a full cross-carrier scan;
@@ -454,3 +454,4 @@ Hermes may schedule a real iteration only when the project has configured the He
 | V2.5 (pending review) | 2026-08-20 | Hermes | Review revision: ledger must never be committed to Git (prevent circular reference / self-contained hash); cold recovery auto-completes on verification pass without Richy; EvidenceIncomplete changed to existing state InProgress |
 | V2.5 (pending review) | 2026-08-20 | Hermes | Added 7 process gaps: §3.2 added ContextGenerationPending; §6.1 added CI/integration-verification writeback + candidate-freeze human-gated event; §7.2/§8 carrier-unavailable 3-consecutive escalation to Richy; §11.1 stall detection (incl. IntegrationVerified timeout escalation); §13.1 recovery escalation threshold (hot→cold→disaster, hot 3 times); §14.1 CanaryFailed state + handling path + 3-consecutive alert Richy |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+| V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |

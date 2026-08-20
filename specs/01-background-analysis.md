@@ -6,7 +6,7 @@
 > Output goal: form a credible fact baseline and problem definition, without prematurely committing to a specific implementation
 > Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
 > Originally finalized: 2026-08-11
-> Revised: 2026-08-20
+> Revised: 2026-08-21
 > Reviewer: Richy (approved)
 
 ## 1. Applicability
@@ -134,7 +134,7 @@ Describe per the actual situation of the feature:
 
 List at least the key differences between local development, automated testing, long-term integration, real external verification, and production environments. Branch names, environment names, and infrastructure are configured per project and must not be assumed in generic documents.
 
-### 4.6.1 Current Test Capability and Proof Boundary
+#### 4.6.1 Current Test Capability and Proof Boundary
 
 The actual coverage of existing tests must be investigated, not merely counted:
 
@@ -281,3 +281,4 @@ This file may be marked "Approved" only when the project owner has confirmed tha
 | V2.3 | 2026-08-11 | — | V2.3 approved baseline |
 | V2.5 | 2026-08-20 | WorkBuddy | §5 title and body "Codex execution requirements" changed to "Execution-Agent (WorkBuddy/Codex) execution requirements," removing single-point binding |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+| V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |

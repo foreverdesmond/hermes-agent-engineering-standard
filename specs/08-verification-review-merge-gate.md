@@ -4,7 +4,7 @@
 > Document status: Approved (V2.5 final baseline)
 > Applicability: all development tasks needing code Review, integration verification, branch merge, or real-environment acceptance
 > Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
-> Revised: 2026-08-20
+> Revised: 2026-08-21
 > Reviewer: Richy (approved)
 
 ## 1. Purpose
@@ -313,3 +313,4 @@ This spec may be used for the iteration's merge judgment only when the project h
 | V2.5 | 2026-08-20 | WorkBuddy | §3.2.1 reference "09" changed to "09-hermes-ledger-runtime.md" |
 | V2.5 (pending review) | 2026-08-20 | Hermes | §3.4 added IntegrationVerified triggered by Integrator reporting integration-check results; §4.2 added candidate-freeze human-gated event (Richy freezes → Hermes auto-dispatches Level 1, consistent with 09 §6.1) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+| V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |

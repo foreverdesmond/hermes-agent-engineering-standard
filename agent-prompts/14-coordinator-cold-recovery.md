@@ -2,7 +2,7 @@
 
 > Spec version: V2.5
 > Document status: Approved (V2.5 final baseline)
-> Author: WorkBuddy
+> Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
 > Created: 2026-08-20
 > Last updated: 2026-08-20
 > Reviewer: Richy (approved)
@@ -44,7 +44,7 @@ BusinessWritesAllowed: false
 
 ## 4. Execution Steps
 
-1. Read the immutable task definition; prefer to verify the ledger; when it is missing or corrupted, recover the plan graph, roles, dependencies, baselines, stable state, and unconsumed records from the last structurally-valid `TASK-STATE-EXCHANGE` snapshot in `CanonicalTaskDocumentPath`.
+1. Read the immutable task definition; prefer to verify the ledger; when it is missing or corrupted, recover the task graph, roles, dependencies, baselines, stable state, and unconsumed records from the last structurally-valid `TASK-STATE-EXCHANGE` snapshot in `CanonicalTaskDocumentPath`.
 2. Scan task branches, iteration branches, worktrees, commits, ancestry, and branch inclusion.
 3. Only for stages recorded as `PendingConsumption`, `PendingVerification`, or missing evidence, directionally find the execution carrier by the `ExecutionRef` in them.
 4. Only read the above target task history; forbid recovery as a full task-list / carrier scan.
@@ -95,7 +95,7 @@ RequiredOwnerDecisions:
 Verdict: Ready / RecoveryIncomplete
 ```
 
-Cold recovery can switch to Active after auto-verification passes; even with `Verdict: Ready`, when cold recovery fails and escalates to disaster tier and project-owner approval is not yet obtained, tasks must not be dispatched on its own.
+Cold recovery can switch to Active after auto-verification passes; even with `Verdict: Ready`, when cold recovery fails and escalates to disaster tier and project-owner approval is not yet obtained, Hermes must not dispatch tasks on its own.
 
 ---
 
