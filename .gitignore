@@ -1,0 +1,112 @@
+# Operating system files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.cache/
+tmp/
+temp/
+
+# Build and compiled output
+build/
+dist/
+out/
+target/
+bin/
+obj/
+release/
+debug/
+coverage/
+.next/
+.nuxt/
+.turbo/
+*.class
+*.dll
+*.exe
+*.o
+*.obj
+*.so
+*.dylib
+*.a
+
+# JavaScript / TypeScript
+node_modules/
+.npm/
+.yarn/
+.pnp.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+ENV/
+
+# Java / Gradle / Maven
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+.mvn/timing.properties
+
+# .NET
+packages/
+TestResults/
+*.userprefs
+
+# Local environment and sensitive files
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.secrets
+*.credentials
+credentials.json
+secrets.json
+service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# Infrastructure state
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Generated documentation and reports
+site/
+public/build/
+reports/
