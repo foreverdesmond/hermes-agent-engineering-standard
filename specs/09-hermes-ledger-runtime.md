@@ -309,7 +309,7 @@ Cron reconciliation additionally checks each round for long-progress-less tasks,
 
 - A task continuously in `ContextGenerationPending` / `Ready` / `InProgress` / `PendingConsumption` for over **2 cron cycles** (~2 minutes) with no state advance or read activity → record stall and alert; still no progress over **4 cron cycles** → escalate to the project owner (Richy).
 - A task in `Integrated` but missing the `IntegrationVerified` writeback (i.e. no corresponding CI/integration-verification writeback signal) for over **2 cron cycles** → record stall and alert; over **4 cron cycles** → escalate Richy, Hermes re-dispatches `IntegrationValidationTask` or human intervenes.
-- Dependency-cycle detection: when a task cannot advance because an upstream is long in `Ready`/`InProgress`, cron reports the dependency-blocking graph at stall escalation, to locate the cycle (the rejection-registration rule for cycles is in `04` §5.2).
+- Dependency-cycle detection: when a task cannot advance because an upstream is long in `Ready`/`InProgress`, cron reports the dependency-blocking graph at stall escalation, to locate the cycle (the rejection (non-registration) rule for cycles is in `04` §5.2).
 
 Do not report "no change" without the following minimal evidence:
 
@@ -361,7 +361,7 @@ Recovery must record `Resumed`, and first perform unconsumed-event reconciliatio
 - **Disaster**: must wait for the project owner (Richy) to intervene and approve `RecoveryApproved` before exiting `RecoveryOnly`;
 - Each escalation is recorded in the recovery report and ledger, to avoid silent infinite loops.
 
-### 13.1 Cold Recovery Steps
+### 13.2 Cold Recovery Steps
 
 1. Read the ledger; if missing or corrupted, recover the plan graph, roles, dependencies, baselines, stable state, and unconsumed records from the last structurally-valid `TASK-STATE-EXCHANGE` snapshot in `CanonicalTaskDocumentPath`;
 2. Scan Git branches, worktrees, commits, ancestry, and iteration-branch inclusion;
@@ -374,7 +374,7 @@ Recovery must record `Resumed`, and first perform unconsumed-event reconciliatio
 9. Write back to the ledger and save the old-state backup; at a stable gate point, copy the latest state as the development-task document persistent snapshot;
 10. Output the recovery report; cold recovery **auto-completes on verification pass (no project-owner intervention needed)**, and exits `RecoveryOnly` resuming scheduling on verification pass.
 
-### 13.2 Maximum-Safe State
+### 13.3 Maximum-Safe State
 
 - Only task-branch commit found: `CodePresence=PresentInTaskBranch`, `TaskState=InProgress` (existing state);
 - Implementer final and Git both valid: recover at most to `Submitted`;

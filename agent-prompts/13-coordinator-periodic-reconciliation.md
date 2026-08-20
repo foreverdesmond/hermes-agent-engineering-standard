@@ -29,7 +29,7 @@ cron precision is minute-level (per *Hermes Capability Boundary List* §4). Even
 
 1. Read the ledger, verify Schema, IterationID, StateRevision, and RecordID uniqueness.
 2. On ledger missing, corrupted, or version rollback, enter `RecoveryOnly`, recover per `../specs/09-hermes-ledger-runtime.md` §13, forbid dispatch, and report recovery needs.
-3. If `Paused=true`, do not consume then advance business state, create tasks, rework, Review, or integrate; output the pause state then end this round.
+3. If `Paused=true`, do not consume or advance business state, create tasks, rework, Review, or integrate; output the pause state then end this round.
 4. Collect all records with `SignalState=PendingConsumption`.
 5. When there are no pending-consumption records, do not call the task list or read carrier-by-carrier; only check ledger integrity, document snapshot, and the Git ancestry relationships needed by the current gate.
 6. When there are pending-consumption records, dedup by `RecordID + SignalRevision`, and read only the `ExecutionRef` bound by that record, not other execution carriers.
