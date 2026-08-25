@@ -243,7 +243,7 @@ Each document is responsible for one role in the development process. The README
 | [06-Context Package](./specs/06-context-package.md) | Defining the generation, validation, exploration, invalidation, and reconciliation of Context Packages. |
 | [07-Sub-Agent Delegation Prompts](./specs/07-subagent-delegation-prompts.md) | Defining role contracts, prompt structure, permissions, and output states. |
 | [08-Verification, Review, and Merge Gates](./specs/08-verification-review-merge-gate.md) | Defining Levels 0–3, independent review, branch gates, and merge eligibility. |
-| [09-Hermes Ledger Runtime](./specs/09-hermes-ledger-runtime.md) | Defining task ledgers, state consumption, pausing, resuming, scheduling handover (`CoordinatorEpoch`), carrier policy, and the dispatch gate. |
+| [09-Hermes Ledger Runtime](./specs/09-hermes-ledger-runtime.md) | Specifying the task ledger, state consumption, pausing, resuming, scheduling-authority handover (`CoordinatorEpoch`), the carrier policy, and the pre-dispatch gate. |
 | [10-Terminology](./specs/10-terminology.md) | Establishing the repository-wide baseline for fixed terms, abbreviations, and official translations. |
 
 Role prompt templates are located in [`agent-prompts`](./agent-prompts/README.md). Templates are the starting point for delegation; they cannot replace investigation of current facts, the task baseline, or an Agent’s autonomous exploration.
@@ -279,6 +279,14 @@ AI is lowering the barrier to creating software, giving more people the opportun
 - Current scheduling implementation: Hermes (replaceable; the standard is not bound to it)
 
 ## V2.5 → V3.0 Upgrade Summary
+
+> **V3.0 key control mechanisms (quick entry)**:
+>
+> - **Terminology baseline**: [specs/10-terminology.md](./specs/10-terminology.md) — fixed terms, abbreviations, and official translations for the whole repository;
+> - **Scheduling-authority handover**: [specs/09 §12.3](./specs/09-hermes-ledger-runtime.md) — `CoordinatorEpoch` fencing, atomic conditional takeover, `TransferID` dual-acknowledgement receipts, lost-owner recovery;
+> - **Carrier Policy Artifact & change control**: [specs/09 §12.4](./specs/09-hermes-ledger-runtime.md) + [specs/05 §6.3](./specs/05-doc-review-change-control.md);
+> - **Pre-dispatch gate (fail-closed)**: [specs/09 §12.4](./specs/09-hermes-ledger-runtime.md) — mandatory checks before every dispatch; BLOCKED means stop and escalate, bypassing prohibited;
+> - **Code Immutability Constraint**: [specs/09 §7.3](./specs/09-hermes-ledger-runtime.md) — unified `danger-full-access` with Reviewer/Validator immutability rules.
 
 V3.0 is not a feature list. It is an upgrade in **standard maturity**: each real problem exposed by the V2.5 production iteration has been converted into a general rule, a mechanical gate, or a data-driven policy.
 

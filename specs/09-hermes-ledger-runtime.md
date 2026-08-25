@@ -369,18 +369,49 @@ Recovery must record `Resumed`, and first perform unconsumed-event reconciliatio
 - Multiple tasks may run in parallel; tasks with conflicts (shared files / same worktree) are not set parallel; if a conflict actually arises, ask the project owner to coordinate (*Hermes Process & Boundary Resolution* C2).
 - One task keeps only one valid execution instance at the same stage, unless split into non-conflicting subtasks.
 
-### 12.3 Coordinator Ownership and Handover (V3.0)
+### 12.3 Coordinator Ownership and Handover Protocol (V3.0)
 
-- Every iteration has exactly one current Coordinator owner. The scheduling authority is fenced by `CoordinatorEpoch`; dispatch and signal consumption from a non-current Epoch **MUST** be rejected.
-- `CoordinatorEpoch` is monotonically increasing. A takeover is valid only when the expected current Epoch and `StateRevision` still match at the atomic compare-and-swap point; otherwise it fails and the caller must re-read the ledger.
-- A normal handover uses a unique `TransferID` and requires acknowledgement from both the old and new owner. The new owner may dispatch only after the handover is durably recorded.
-- If the old owner is lost for the configured `LostOwnerTimeout` (default: two reconciliation cycles), recovery takeover still requires Richy's authorization. Timeout alone does not silently transfer ownership.
-- Two active scheduling drivers for the same `IterationID` are prohibited. A second driver must remain read-only or stop; it may not dispatch, consume signals, or advance state.
-- “Pause” changes only `Paused=true` and does not transfer ownership. “Resume scheduling” clears the pause and returns ownership to cron; interactive takeover requires an explicit owner-transfer instruction.
+When scheduling authority is handed over between the two driver classes — "coordinating cron" and "interactive session" — this protocol is mandatory; both sides dispatching simultaneously (dual drivers) is prohibited.
+
+**State-source-of-truth fields** (persisted in the ledger's top-level `CoordinatorEpoch` object):
+
+| Field | Meaning |
+|---|---|
+| `Epoch` | Monotonically increasing integer (FencingToken); +1 on every ownership change |
+| `Owner` | Current owner identity (`cron:<job_id>` / `interactive:<session_id>`) |
+| `StateRevisionAtTakeover` | Ledger StateRevision snapshot at takeover |
+| `LostOwnerTimeout` | Lost-owner threshold: fixed default of 2 scheduling cycles; a project may configure a positive-integer threshold, validated by the gate to exist and be a positive integer before dispatch |
+
+**Normal handover (dual acknowledgement; ordering per proposal-v5 finalization — all old-owner writes MUST happen before the ownership change)**:
+
+1. The **old owner writes its handover receipt** (its last write before the change): TransferID, stop-dispatch confirmation, tail Signal inventory, current StateRevision, and consent to hand over;
+2. The new driver performs one **atomic conditional update** using that TransferID plus the Epoch/StateRevision carried in the receipt: the new Epoch takes effect only if "the current Epoch and StateRevision still match"; on mismatch the takeover fails and must be retried or escalated;
+3. After a successful change, the **new owner** writes a takeover-success receipt and the audit starting point;
+4. Audit records link both receipts into one complete handover via the same TransferID;
+5. **After the ownership change, the old owner MUST NOT write anything further to the ledger** (Fencing rule).
+
+**Lost-owner recovery**:
+
+1. Old owner exceeds `LostOwnerTimeout` with no heartbeat / no tick → enter recovery mode;
+2. Takeover in recovery mode requires explicit authorization by the project owner (Richy); automatic self-healing is forbidden;
+3. Once authorized, change ownership by atomic conditional update; all in-flight executions of the old Epoch are frozen pending manual adjudication.
+
+**Richy confirmation requirements (by handover type; V3.0 finalization decision DEC-V3.0-001)**:
+
+| Handover type | Richy prior confirmation | Trigger constraint | Post-duty |
+|---|---|---|---|
+| Normal handover (dual acknowledgement) | **No per-event confirmation needed**; Richy may use natural language without templated instructions | **Instruction→semantics mapping table (Richy's finalized wording)**: “暂停” (pause) = set Paused=true only, owner unchanged; “继续调度” / “继续” (resume scheduling) = clear the pause AND **owner is always cron** (if cron is not the current owner, first hand authority back to cron per this protocol); “由你调度” / “交给交互会话” (you schedule / hand over to the interactive session) = the ONLY expressions that trigger interactive-session takeover. Any other wording does not constitute an ownership change; when the taker is ambiguous, keep the status quo or ask. Once handover intent is confirmed, TransferID/old-new owners/Epoch are generated and recorded by Hermes (Richy fills in nothing) | The new owner reports TransferID, reason for the change, and old/new Epochs in its next briefing for after-the-fact review; anomalies found allow changing back (Epoch+1) |
+| Lost-owner recovery takeover | **Explicit authorization required** (clause above) | Exceeds `LostOwnerTimeout` with no heartbeat/tick | The authorization record enters the ledger as the substitute for the old owner's receipt |
+
+**Fencing execution rules**:
+
+- Every dispatch and consumption action carries the current Epoch and validates the match; mismatch is rejected;
+- Attempt counters, pause state, and pending-consumption records are inherited with the scheduling-state source of truth — an ownership change does not reset them;
+- A normal handover needs dual-acknowledgement receipts; when the old instance is lost, timeout + Richy's authorization substitutes for its receipt.
 
 ### 12.4 Carrier Policy and Change Control (V3.0)
 
-- The **sole source of truth** for carrier-selection rules is the "Carrier Policy Artifact" (a versioned data file carrying `PolicyVersion` and `PolicyArtifactDigest`); the spec text no longer enumerates concrete carrier allocations.
+- The **sole source of truth** for carrier-selection rules (the original oral rules R1-R5 and subsequent revisions) is the "Carrier Policy Artifact" (a versioned data file carrying `PolicyVersion` and `PolicyArtifactDigest`); the spec text no longer enumerates concrete carrier allocations.
 - **Dual-layer change channel**:
 
 | Change type | Example | Channel |
