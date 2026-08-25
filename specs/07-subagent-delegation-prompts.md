@@ -1,10 +1,10 @@
 # Sub-Agent Delegation & Prompt Spec
 
-> Spec version: V2.5
-> Document status: Approved (V2.5 final baseline)
+> Spec version: V3.0
+> Document status: Approved (V2.5 is the previous baseline; finalized 2026-08-24, Richy final review passed)
 > Applicability: using agents to perform development, Review, testing, scheduling, or merge review
-> Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
-> Revised: 2026-08-21
+> Author: Tiffany-Dev (V3.0 revision; initial version = WorkBuddy)
+> Revised: 2026-08-24
 > Reviewer: Richy (approved)
 
 ## 1. Single Responsibility
@@ -21,9 +21,9 @@ V2.5 consolidates into 6 core roles (see README §4); each task enables 2–N as
 |---|---|---|
 | Coordinator (total scheduling) | Dispatch, periodic reconciliation, gate judgment | Carried by the Hermes resident service; does not do sub-agent hands-on work |
 | Implementer (development) | First-time development + rework + L0 unit tests | Only on own feature branch; does not approve own work |
-| Reviewer (review) | Review development output (diff/commit) | Review on diff + L0 evidence; read-only, no merge |
+| Reviewer (review) | Review development output (diff/commit) | Review on diff + L0 evidence; Code Immutability Constraint (09 §7.3): under danger-full-access, review in an isolated detached verification workspace; do not modify business source, do not commit candidates, do not merge |
 | Integrator (integration) | Merge feature → iteration | Only merges precisely approved commits; does not review own merge |
-| Validator (test verification) | Full test after merge (L1 + regression) | Runs full suite on integration branch; read-only / test environment; no merge |
+| Validator (test verification) | Full test after merge (L1 + regression) | danger-full-access; runs the full suite on a clean detached checkout; subject to the Code Immutability Constraint, no merge |
 | Doc/Design Reviewer (documentation/design review) | Document review + design + work-package/context | Pure documentation belongs to it; low-risk design not reviewed, high-risk reviewed by another of same role |
 
 **Consolidation sources (V2.4 → V2.5)**: Rework Implementer → Implementer (rework is a sequel to development); System Reviewer → Reviewer (distinguished by Level); Merge Reviewer → Reviewer (merge-eligibility review perspective); Iteration Integrator / Main Merge Executor → Integrator (both are merge execution, only target branch differs); Requirements/Design/Task Reviewer → Doc/Design Reviewer (merged).
@@ -35,13 +35,15 @@ V2.5 consolidates into 6 core roles (see README §4); each task enables 2–N as
 Role and execution mechanism are two different concepts. The project must record for each dispatch:
 
 ```text
-ExpectedExecutionKind: WorkBuddy / Codex / Human / ApprovedEquivalent
+ExpectedExecutionKind: <determined by the current version of the carrier policy artifact>
 ExpectedModel
 Role
 InvocationID
+PolicyVersion + PolicyArtifactDigest
 ```
 
-- The execution carrier (WorkBuddy / Codex / Human) is explicitly specified at dispatch; Hermes dispatches per `09-hermes-ledger-runtime.md` and binds `ExecutionRef`;
+- `ExpectedExecutionKind` is no longer a static enumeration: **available carriers and allocation rules are defined solely by the current version of the "carrier policy artifact"** (see 09 §12.4); specify explicitly at dispatch and validate through the fail-closed pre-dispatch gate; Hermes dispatches per `09-hermes-ledger-runtime.md` and binds `ExecutionRef`;
+- Each dispatch's ledger record attaches PolicyVersion and PolicyArtifactDigest, for afterwards auditing "why that carrier was chosen at the time";
 - A dispatch returning a temporary request identifier means `Provisioning`, not failure;
 - On dispatch failure or carrier unavailable, register `ControlPlaneError` and stop; do not substitute another mechanism without authorization (no pseudo-independent self-review);
 - Only when the project owner pre-approves `ApprovedEquivalent` is an equivalent mechanism allowed;
@@ -124,7 +126,8 @@ Do not send only "complete the task per the document," nor indiscriminately dump
 
 - Implementer and Rework Implementer may only create commits on their own task branch;
 - Ordinary development roles must not directly commit or merge into the iteration development branch, long-term integration branch, stable branch, or main branch;
-- Reviewer, Validator, and Coordinator are read-only by default; they must not form a passing conclusion by modifying code;
+- Reviewer and Validator are subject to the **Code Immutability Constraint**: unified use of danger-full-access to obtain build and test capability, but they must not modify tracked business source, must not commit candidates, and must not merge; Review must run in an isolated detached verification workspace based on the precise candidate commit, with before-and-after HEAD/tree two-way reconciliation—any change invalidates the conclusion (see 09 §7.3);
+- The Coordinator is subject to the scheduling-authority Epoch constraint and the pre-dispatch gate constraint (09 §12.3/§12.4);
 - Iteration Integrator may only merge specified commits that are already `TaskAccepted` into the iteration development branch;
 - Main Merge Executor may only merge the precise candidate into the main branch after `MergeApproved` and explicit project-owner authorization;
 - When a conflict requiring implementation change occurs, the merge executor stops and returns to the development/rework loop.
@@ -155,7 +158,7 @@ When using the Coordinator:
 - After development completes, enter independent Review; on failure return to the original task for rework;
 - On Review pass, first form `TaskAccepted`; then dispatch an independent iteration-integration task to form `Integrated`, then execute affected integration verification to form `IntegrationVerified`;
 - Dispatch downstream only when dependencies are satisfied; a dependency needing upstream implementation defaults to waiting for `Integrated`; the dependency graph is recorded by the Hermes ledger, and Hermes actively triggers downstream when dependencies are satisfied;
-- After dispatch, Hermes consumes the ledger via event (Feishu / Codex gateway polling) + cron fallback; the execution agent reports via carrier channel, and Hermes writes `PendingConsumption` and processes immediately;
+- After dispatch, Hermes consumes the ledger via event sources + scheduled reconciliation fallback; the execution agent reports via carrier channel, and Hermes writes `PendingConsumption` and processes immediately;
 - Reconciliation only processes state changes; it does not resend the same instruction;
 - Active heartbeats and long logs may be kept in the derived evidence/audit cache; task state, Invocation, execution reference, pending-consumption signal, and consumption confirmation must be written to the Hermes ledger;
 - Runtime state is written to the ledger by Hermes per `09-hermes-ledger-runtime.md`; when the ledger is unavailable, follow the recovery protocol;
@@ -201,7 +204,7 @@ Standard scheduling loop:
 ```text
 Hermes registers DispatchKey/Invocation/state record in the ledger and dispatches
 → binds ExecutionRef (unified execution reference)
-→ event (Feishu/Codex gateway polling) arrives or cron fallback reconciliation triggers
+→ an event source arrives or the scheduled reconciliation fallback triggers
   → PendingConsumption: only read the execution carrier bound by the record, verify delivery, then idempotently dispatch the next action
   → no new state: do not iterate carriers, only do ledger/document/Git health reconciliation
 ```
@@ -240,8 +243,8 @@ Interruption is allowed only when the executor explicitly reports `Blocked`/`Nee
 - [ ] Review perspective is not pre-limited by the development context;
 - [ ] Stop conditions are explicit;
 - [ ] The pre-dispatch checklist has passed, and document state production/consumption and periodic reconciliation are configured;
-- [ ] A unique ledger (`LedgerLocation`), idempotent `DispatchKey`, single-instance idempotent dedup (no coordination-lease lock), pause, three-tier recovery, and applicable Canary are configured;
-- [ ] The specified execution mechanism (WorkBuddy/Codex/Human) is not substituted without authorization (no pseudo-independent self-review);
+- [ ] A unique ledger (`LedgerLocation`), idempotent `DispatchKey`, CoordinatorEpoch fencing validation, pause gate, and applicable Canary are configured;
+- [ ] The execution mechanism designated by the policy artifact is not substituted without authorization (no pseudo-independent self-review);
 - [ ] No unnecessary specific model, business, or tool is bound.
 
 ## 10. Template Maintenance
@@ -265,3 +268,5 @@ Agent delegation may start only when the project has selected the minimal necess
 | V2.5 (pending review) | 2026-08-20 | Hermes | §8.2 synced IntegrationVerified execution subject = Integrator (or independent IntegrationValidationTask), not depending on external CI webhook (consistent with 09 §6.1 / 08 §3.4) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
 | V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |
+| V3.0-draft | 2026-08-24 | Hermes | V3.0 revision (proposal v5): ① §2 role-table Reviewer row and §5.1 Git permissions: "read-only" changed to the "Code Immutability Constraint"—unified danger-full-access (build/test requires write permission), isolated detached verification workspace + before-and-after HEAD/tree two-way reconciliation; Coordinator adds Epoch constraint and gate constraint; ② §2.1 `ExpectedExecutionKind` static enumeration changed to reference the current version of the "carrier policy artifact", dispatch records add PolicyVersion+PolicyArtifactDigest |
+| V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all ten review rounds (proposal v1-v5 plus nine body rounds) closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |
