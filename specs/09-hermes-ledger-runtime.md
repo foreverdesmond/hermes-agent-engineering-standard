@@ -35,7 +35,7 @@ This spec does not authorize business-code modification, external operations, Re
 5. **Maximum-safe state**: on recovery, restore only to the highest state the evidence supports; unprovable content stays pending-verification.
 6. **Control-plane failure does not pollute business state**: dispatch, event-read, or ledger-write failures must not be disguised as code `Blocked` or a Review Finding.
 7. **Single-owner idempotency**: Hermes is single-machine, and each iteration has exactly one current scheduling owner identified by the monotonically increasing `CoordinatorEpoch`; idempotency is guaranteed by `DispatchKey` dedup and stale-Epoch fencing, with no coordination-lease lock.
-8. **Event-driven + cron fallback**: events (Feishu long-connection / Codex gateway polling) take priority, cron periodic reconciliation is the fallback; lost events do not affect correctness.
+8. **Event-driven + scheduled fallback**: event sources take priority, scheduled reconciliation is the fallback; lost events do not affect correctness.
 9. **Explicit execution-mechanism configuration**: each dispatch records `ExpectedExecutionKind`, model, and sandbox; the execution carrier may not be substituted without authorization.
 
 ## 3. Three State Types
@@ -55,7 +55,7 @@ Describes the running state of the execution carrier, not the development-task c
 | Unavailable | Currently unreadable or the execution carrier is lost |
 | Cancelled | The execution carrier has been explicitly cancelled |
 
-When the Codex gateway returns a formal `thread id`, register the execution identifier directly; if only a request identifier is returned, that means `Provisioning`, and must not be judged as creation failure. Use `ExecutionRef` uniformly to reference the execution carrier, not distinguishing `clientThreadId/threadId`.
+When the adapter returns a formal execution identity, register it directly; if only a provisional identifier is returned, that means `Provisioning`, and must not be judged as creation failure. Use `ExecutionRef` uniformly to reference the execution carrier, without distinguishing provisional/formal identity stages.
 
 ### 3.2 Task State (TaskState)
 
@@ -123,7 +123,7 @@ Document baselines must use immutable Git commit/tree, controlled-document revis
 
 ### 5.1 Sole Source of Truth for State
 
-- **The Hermes ledger** (`LedgerLocation`, local JSON state file + optional SQLite, **inside the project directory, not committed to Git**) is the **sole real-time source of truth for task runtime state** during the active iteration, maintained by the single Hermes instance. **The ledger must never be committed to Git—even if the execution carrier has `danger-full-access` commit permission, no add/commit may include ledger files** (the ledger changes with development and would create a circular reference / self-contained hash with commits, and must be isolated from the version repository).
+- **The Hermes ledger** (`LedgerLocation`, local JSON state file + optional SQLite, **inside the project directory, not committed to Git**) is the **sole real-time source of truth for task runtime state** during the active iteration, maintained by the current CoordinatorEpoch owner. **The ledger must never be committed to Git—even if the execution carrier has `danger-full-access` commit permission, no add/commit may include ledger files** (the ledger changes with development and would create a circular reference / self-contained hash with commits, and must be isolated from the version repository).
 - **The development-task document** (`CanonicalTaskDocumentPath`) `TASK-STATE-EXCHANGE` block is the **Git persistent snapshot**, used for cross-restart / disaster recovery.
 - The execution Agent **does not write the ledger directly**; it reports structured results through the carrier channel, which Hermes consumes and writes into the ledger (see §8).
 - The ledger stores only summaries, SHAs, Verdict, `ExecutionRef`, and next-action needed for locating and verifying; long logs, full diff, and full final are not written into the ledger, but fall into the derived evidence directory.
@@ -134,8 +134,12 @@ Document baselines must use immutable Git commit/tree, controlled-document revis
 SchemaVersion, ProtocolVersion, IterationID, HermesInstanceRef,
 CoordinatorMode, Paused, CodeBaseSHA, RequirementsBaselineRef,
 DesignBaselineRef, TaskDocumentBaselineRef, CanonicalTaskDocumentPath,
-LedgerLocation, StateRevision, ConsumedRevision, UpdatedAt
+LedgerLocation, StateRevision, ConsumedRevision, UpdatedAt,
+CoordinatorEpoch{Epoch, Owner, StateRevisionAtTakeover, LostOwnerTimeout},
+PolicyVersion, PolicyArtifactDigest
 ```
+
+V3.0 new required fields: `CoordinatorEpoch` (top-level object; §12.3 sole source of truth for scheduling authority), `PolicyVersion`, and `PolicyArtifactDigest` (currently effective carrier policy artifact, §12.4).
 
 ### 5.3 Task-Level Minimal Fields
 
@@ -145,8 +149,15 @@ ExpectedExecutionKind, ExpectedModel, ActualModel, ModelProvider, Sandbox,
 TaskBranch, WorktreePath, CodeBaseSHA, HeadSHA,
 ExecutionRef, CarrierStatus, TaskState, EvidenceState,
 SignalRevision, SignalState, ProducedAt, ConsumedAt, ConsumedBy,
-LastEventFingerprint, BlockerType, RecoveryConfidence, NextAction
+LastEventFingerprint, BlockerType, RecoveryConfidence, NextAction,
+MaxAutomaticAttempts, AutomaticAttemptsCount, ExecutionFailureType,
+PolicyVersion, PolicyArtifactDigest, DispatchedCoordinatorEpoch
 ```
+
+V3.0 new required fields:
+
+- **Task/stage level**: `PolicyVersion` + `PolicyArtifactDigest`—the policy may change within one iteration; only the dispatch-time policy snapshot can prove "why that carrier was chosen for that dispatch"; `DispatchedCoordinatorEpoch`—the scheduling-authority epoch at dispatch time (iteration level keeps only the current owner state);
+- `MaxAutomaticAttempts` (default 3, cap 3), `AutomaticAttemptsCount` (persisted count, not reset by owner change or instance replacement), and `ExecutionFailureType` (execution-failure classification, §8).
 
 `ExpectedModel` is what the project requires; when `ActualModel` cannot be verified, record `Unknown`, and do not claim a model match on your own.
 
@@ -154,23 +165,26 @@ LastEventFingerprint, BlockerType, RecoveryConfidence, NextAction
 
 ### 6.1 Event Sources and Dual-Channel Scheduling
 
-| Channel | Coverage | Nature |
+Event sources are defined by **functional type**; each type's concrete channel implementation is a deployment fact, registered in the instance capability record:
+
+| Functional event source | Coverage | Nature |
 |---|---|---|
-| Feishu long-connection (lark-ws) | Receive WorkBuddy reply messages | Event, may be lost (empirically confirmed) |
-| Codex gateway polling `GET /v1/threads/:id` | Query Codex thread progress | Event, active polling |
-| CI / integration-verification writeback | After the Integrator merges the precise commit, it runs/triggers affected integration checks and reports a structured protocol header (with `IntegrationCommit` + `IntegrationStatus`) through its carrier channel (Feishu/Codex), which Hermes consumes into the ledger | Event, reported by the execution carrier, not depending on an external webhook |
-| Candidate freeze (human-gated) | After the project owner freezes the iteration candidate and informs Hermes (or Hermes polls the freeze marker), it triggers dispatching Level 1 (Validator / System Reviewer) | Event, human-gated |
-| Hermes cron periodic polling | **Fallback reconciliation** (~1 minute) | Fallback, covers event loss |
-| TG push | Notify key nodes | Output, 0 token |
+| Push event source | Receive interactive-carrier reply messages | Event, may be lost |
+| Polling event source | Query async-carrier execution progress | Event, active polling |
+| Integration writeback | After the Integrator merges the precise commit and runs affected integration checks, it reports a structured protocol header (with `IntegrationCommit` + `IntegrationStatus`) through its carrier channel, which Hermes consumes into the ledger | Event, reported by the execution carrier, not depending on an external webhook |
+| Candidate freeze (human-gated) | After the project owner freezes the iteration candidate and informs Hermes (or Hermes polls the freeze marker), it triggers dispatching Level 1 | Event, human-gated |
+| Scheduled reconciliation fallback | Reconciliation loop backfilling push-event loss | Fallback, covers event loss |
+| Key-node notification output | Notify the project owner of key nodes | Output |
 
-**Conclusion**: events (Feishu + Codex polling + CI writeback + candidate freeze) are consumed first, cron periodic reconciliation is the fallback; lost events do not affect correctness.
+**Conclusion**: event sources are consumed first, scheduled reconciliation is the fallback; lost events do not affect correctness.
 
-> **IntegrationVerified writeback note**: after `Integrated`, `IntegrationVerified` no longer depends on an external CI webhook. The execution subject is the **Integrator** (or an independent `IntegrationValidationTask`): after it merges the precise commit, it runs/triggers affected integration checks and reports a structured protocol header (with `IntegrationCommit` + `IntegrationStatus=Passed/Failed`) through its own carrier channel (Feishu/Codex); Hermes consumes this signal into the ledger and triggers downstream Level 1. A missing report is treated as a pending-consumption signal, escalated by cron stall detection (see §11).
+> **IntegrationVerified writeback note**: after `Integrated`, `IntegrationVerified` no longer depends on an external CI webhook. The execution subject is the **Integrator** (or an independent `IntegrationValidationTask`): after it merges the precise commit, it runs/triggers affected integration checks and reports a structured protocol header (with `IntegrationCommit` + `IntegrationStatus=Passed/Failed`) through its own carrier channel; Hermes consumes this signal into the ledger and triggers downstream Level 1. A missing report is treated as a pending-consumption signal, escalated by cron stall detection (see §11).
 
 ### 6.2 Idempotent Identity
 
 - Dispatch idempotency key: `DispatchKey = IterationID + TaskID + Stage + TargetIdentity`. When the same `DispatchKey` already has a valid instance, re-dispatch is forbidden.
 - Consumption idempotency key: `RecordID + SignalRevision`. Re-reading the same record only updates read metadata, and does not repeatedly create Review, rework, or integration tasks.
+- **RecordID global uniqueness (V3.0)**: `RecordID` must be generated as a non-reusable ULID/UUID; manual sequence reuse is forbidden; before generation, de-duplicate across all Tasks and Signals. Conflict handling: freeze the conflicting record, generate a new ID, and retain an old-to-new mapping audit. The pre-dispatch gate enforces fail-closed validation of RecordID uniqueness.
 - Event fingerprint `Fingerprint` covers at least event type, task, Invocation, target SHA/candidate, and normalized result.
 
 ### 6.3 Causality
@@ -184,32 +198,43 @@ DispatchKey = IterationID + TaskID + Stage + TargetIdentity
 
 ## 7. Dispatch and Identity Binding
 
-### 7.1 Dispatch API
+### 7.1 Dispatch Adapter Contract (V3.0: abstract contract; implementation details belong to the instance registry)
 
-Hermes → execution carrier:
+The scheduler interacts with execution carriers through **dispatch adapters**. Available carriers are decided by the current version of the "carrier policy artifact" (§12.4); this spec enumerates no concrete carriers and prescribes no endpoints, parameters, or vendor configuration.
 
-| Carrier | Dispatch method | Sync |
-|---|---|---|
-| WorkBuddy | Feishu post message @WB | Async (one-way delivery) |
-| Codex | `POST /v1/threads`, body `{prompt, cwd, model, modelProvider, sandbox, approval}` | Sync / async |
-| Human | Hermes notifies via TG/Feishu, human performs the work | Async |
+Contract every dispatch adapter must satisfy:
 
-`modelProvider`: `openai` (native) / `opencodex` (CodexSplit third-party).
+| Contract item | Requirement |
+|---|---|
+| Dispatch | Accept a structured dispatch intent and submit it to the target carrier |
+| Identity binding | Return a traceable execution identity (ExecutionRef) for subsequent directed reads |
+| Sync/async results | Support synchronous return or an asynchronous completion signal; when asynchronous, a consumable completion event must eventually be produced |
+| Failure semantics | Unavailability/failure must be reported explicitly (ControlPlaneError); silent drops are forbidden |
 
-### 7.2 ExecutionRef Unified Identity
+> Concrete endpoints, request parameters, vendors, and channel configuration are deployment facts, registered in the **instance capability registry** (a non-normative controlled record), updated as the deployment evolves, and never entering the spec text.
 
-- All execution carriers are uniformly modeled as `ExecutionRef`, replacing the old `clientThreadId → threadId` two-stage mapping.
-- When Codex returns a formal thread id, register `ExecutionRef = thread id`; when only a request identifier is returned, register `Provisioning`, and resolve the formal identifier later.
+### 7.2 ExecutionRef Unified Identity (V3.0: platform-neutral)
+
+- All execution carriers are uniformly modeled as `ExecutionRef`—a traceable execution identity returned by the adapter; no platform-specific ID model or format is prescribed.
+- **Provisional and formal identity**: an adapter may first return a **provisional identity** (register `Provisioning` at that point); once the formal identity is ready it **replaces** the provisional one; the replacement must leave an audit trail and must not produce two coexisting formal identities.
 - When a dispatch-create call fails, register `ControlPlaneError`, do not register business `Blocked`, and do not fall back to another execution mechanism (unless the project owner approves `ApprovedEquivalent`).
 - **Carrier-unavailable escalation threshold**: if the same execution carrier (identified by `ExecutionRef`) fails dispatch/read consecutively **3 times** and remains unavailable, Hermes must not keep spinning and retrying; it must escalate and alert the project owner (Richy); only when Richy approves `ApprovedEquivalent` may an equivalent carrier be substituted, otherwise keep `Provisioning`/`NeedsAttention`/`PendingVerification` and wait for Richy to intervene.
 
-### 7.3 Sandbox and Git Authorization (V3.0)
+### 7.3 Sandbox Tiers and Git Authorization (V3.0: unified danger-full-access + Code Immutability Constraint)
 
-| Task type | sandbox | Note |
+| Role | sandbox | Code Immutability Constraint |
 |---|---|---|
-| Any Codex dispatch (development / Review / integration / documentation) | danger-full-access | Unified policy; the carrier policy artifact is the source of truth |
+| Implementer / Integrator / Doc·Design Reviewer | danger-full-access | Modify and commit within task scope |
+| Coding / System / Final-Merge Reviewer | danger-full-access | **Code immutable**: only build, run tests, and perform read-only checks; must not modify business source, must not commit candidates, must not merge |
+| Validator | danger-full-access | Same as Reviewer; verification artifacts (logs/evidence) writable |
 
-All Codex roles use `danger-full-access` for dispatch consistency. This does not grant Reviewers or Validators permission to alter the reviewed business source: they may build and test, but **MUST NOT** modify tracked business source, candidate commits, or merge. Hermes must reconcile `HEAD` and the worktree tree before and after Review/Validation; any unexpected change invalidates the conclusion. Hermes does not perform git on behalf of the carrier.
+The V2.5 read-only sandbox was empirically unable to compile/run tests, so Reviewers could not reach trustworthy conclusions; therefore, from V3.0 onward **all Codex dispatches uniformly use `danger-full-access`**. The permission expansion is offset by the "Code Immutability Constraint":
+
+- Review must execute in an **isolated detached verification workspace based on the precise candidate commit**, protecting the developer's original worktree uncommitted content and Review independence;
+- Verify the candidate HEAD/tree at review start; at review end verify again that HEAD is unchanged and the workspace has no tracked business-source diff—any change invalidates that Review's conclusion;
+- Any issue found returns to the original development carrier as a Finding for rework; a Reviewer must not modify code itself to form a passing conclusion.
+
+Hermes does not perform git on behalf of carriers; worktree creation is done by the Implementer (Hermes dispatches only TaskID/base branch/worktree directory), and cleanup is executed uniformly by the Integrator (see *Hermes Process & Boundary Resolution* C5/D2/D3b).
 
 ## 8. State Production and Consumption Protocol
 
@@ -217,7 +242,7 @@ Standard loop:
 
 ```text
 Hermes reads the ledger
-→ event arrives (Feishu receives WB reply / Codex gateway polls completed) or cron reconciliation triggers
+→ an event source arrives (push message / polling reaches completed) or scheduled reconciliation triggers
 → collect records with SignalState = PendingConsumption
 → only read the detailed final/help for that record's bound ExecutionRef
 → after verification, update the summary state, mark Consumed, and dispatch the follow-up
@@ -252,7 +277,7 @@ Different sources only prove their own responsibility scope:
 | Whether development formally committed | Ledger record + Implementer final + Git verification |
 | Review conclusion | Ledger record + independent Reviewer final |
 | Which code the Review reviewed | Reviewer final + Git SHA |
-| Whether the execution carrier is running or ended | Feishu message / Codex gateway thread history |
+| Whether the execution carrier is running or ended | Carrier-channel messages / polling event-source history |
 | Project-owner authorization | Explicit user message or formal authorization record |
 
 When sources conflict, record them side by side. For example, when code has appeared in the iteration branch but lacks Review/integration evidence:
@@ -290,7 +315,7 @@ Test-responsibility layering (prevent token waste, per *Hermes Process & Boundar
 
 ## 11. cron Reconciliation
 
-Hermes cron (~1 minute) reconciliation each round:
+Scheduled reconciliation each round (frequency registered in the instance capability record):
 
 1. Read the ledger and `Paused`;
 2. When `Paused=true`, only report the pause; do not read or dispatch business follow-ups;
@@ -305,8 +330,8 @@ Hermes cron (~1 minute) reconciliation each round:
 
 Cron reconciliation additionally checks each round for long-progress-less tasks, to avoid silent deadlock (note: tasks still active, with a recent heartbeat, or waiting for human authorization are not false-alarmed):
 
-- A task continuously in `ContextGenerationPending` / `Ready` / `InProgress` / `PendingConsumption` for over **2 cron cycles** (~2 minutes) with no state advance or read activity → record stall and alert; still no progress over **4 cron cycles** → escalate to the project owner (Richy).
-- A task in `Integrated` but missing the `IntegrationVerified` writeback (i.e. no corresponding CI/integration-verification writeback signal) for over **2 cron cycles** → record stall and alert; over **4 cron cycles** → escalate Richy, Hermes re-dispatches `IntegrationValidationTask` or human intervenes.
+- A task continuously in `ContextGenerationPending` / `Ready` / `InProgress` / `PendingConsumption` for over **2 consecutive reconciliation cycles** (cycle length registered in the instance capability record) with no state advance or read activity → record stall and alert; still no progress over **4 reconciliation cycles** → escalate to the project owner (Richy).
+- A task in `Integrated` but missing the `IntegrationVerified` writeback (i.e. no corresponding integration-verification writeback signal) for over **2 reconciliation cycles** → record stall and alert; over **4 reconciliation cycles** → escalate Richy, Hermes re-dispatches `IntegrationValidationTask` or a human intervenes.
 - Dependency-cycle detection: when a task cannot advance because an upstream is long in `Ready`/`InProgress`, cron reports the dependency-blocking graph at stall escalation, to locate the cycle (the rejection (non-registration) rule for cycles is in `04` §5.2).
 
 Do not report "no change" without the following minimal evidence:
@@ -413,7 +438,7 @@ Before launching a real high-risk iteration, the control plane must be tested in
 
 1. Dispatch returns only a temporary request identifier, can correctly enter `Provisioning` and bind a formal `ExecutionRef`;
 2. The subtask completes earlier than the cron reconciliation cycle, and can be consumed on event or next reconciliation;
-3. Feishu events unavailable, but when the ledger has `PendingConsumption`, the result can still be precisely located;
+3. Push event sources unavailable, but when the ledger has `PendingConsumption`, the result can still be precisely located;
 4. When final is missing fields, ask the original task to resend, do not repeatedly create an execution instance;
 5. Re-reading the same `RecordID + SignalRevision` does not re-dispatch;
 6. When the user pastes complete results, enter verification rather than directly negate or directly approve;
@@ -437,7 +462,7 @@ When any Canary scenario fails, enter the `CanaryFailed` state, and close the lo
 2. The responsible party (Hermes engineering side) fixes the control plane or carrier config;
 3. Re-run Canary → on pass, lift the real-business-task `Planned/Ready` dispatch freeze;
 4. Consecutive **3 times** re-run still not passing → alert the project owner (Richy) for manual intervention, do not keep auto-retrying to hide the problem;
-5. Throughout, notify Richy of the current `CanaryFailed` state and handling progress via TG / Feishu.
+5. Throughout, notify Richy of the current `CanaryFailed` state and handling progress via configured notification channels.
 
 `CanaryFailed` is not business `Blocked`, and does not pollute code-task state; it only freezes the launch of real high-risk iterations until Canary passes or Richy explicitly records a temporary waiver.
 
@@ -477,3 +502,4 @@ Hermes may schedule a real iteration only when the project has configured the He
 | V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |
 | V3.0-draft | 2026-08-24 | Hermes | Added the Carrier Policy Artifact contract, PolicyArtifactDigest, CoordinatorEpoch fencing, atomic conditional takeover, TransferID, LostOwnerTimeout, and the single-owner / dual-driver prohibition; unified Codex dispatch on danger-full-access and added the Code Immutability Constraint |
 | V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all review rounds closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |
+| V3.0 sync | 2026-08-25 | Hermes | WB batch review closure: added §12.4 (carrier policy and change control); §5.2/§5.3 synced with Chinese V3.0 mandatory fields (CoordinatorEpoch / PolicyVersion / PolicyArtifactDigest / MaxAutomaticAttempts etc.); §6.1 event sources abstracted to functional types; §6.2 RecordID global uniqueness (ULID/UUID); §7.1 dispatch adapter contract; §7.3 role-based immutability table; deployment-fact residuals removed |
