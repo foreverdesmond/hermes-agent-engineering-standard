@@ -243,7 +243,8 @@ Each document is responsible for one role in the development process. The README
 | [06-Context Package](./specs/06-context-package.md) | Defining the generation, validation, exploration, invalidation, and reconciliation of Context Packages. |
 | [07-Sub-Agent Delegation Prompts](./specs/07-subagent-delegation-prompts.md) | Defining role contracts, prompt structure, permissions, and output states. |
 | [08-Verification, Review, and Merge Gates](./specs/08-verification-review-merge-gate.md) | Defining Levels 0–3, independent review, branch gates, and merge eligibility. |
-| [09-Hermes Ledger Runtime](./specs/09-hermes-ledger-runtime.md) | Defining task ledgers, state consumption, pausing, resuming, and the scheduling Canary. |
+| [09-Hermes Ledger Runtime](./specs/09-hermes-ledger-runtime.md) | Defining task ledgers, state consumption, pausing, resuming, scheduling handover (`CoordinatorEpoch`), carrier policy, and the dispatch gate. |
+| [10-Terminology](./specs/10-terminology.md) | Establishing the repository-wide baseline for fixed terms, abbreviations, and official translations. |
 
 Role prompt templates are located in [`agent-prompts`](./agent-prompts/README.md). Templates are the starting point for delegation; they cannot replace investigation of current facts, the task baseline, or an Agent’s autonomous exploration.
 
@@ -251,6 +252,7 @@ Role prompt templates are located in [`agent-prompts`](./agent-prompts/README.md
 
 - Product objectives, business decisions, risk acceptance, and final authorization remain the responsibility of humans;
 - Agents may not replace humans in performing unauthorized external operations;
+- Operations rejected by security controls must be handed to a human for execution and may not be bypassed; privileged operations require authorization and an audit trail;
 - Projects may use their own languages, frameworks, models, and branch strategies;
 - Large projects should be decomposed by Sprint and delivered through multiple iterations;
 - Test results must be interpreted together with design review, system verification, and acceptance in the real environment.
@@ -269,11 +271,44 @@ AI is lowering the barrier to creating software, giving more people the opportun
 
 ## Current Version
 
-- Standard version: V2.5
-- Standard status: Reviewed and approved (finalized baseline)
+- Standard version: V3.0 (finalized 2026-08-24)
+- Standard status: Reviewed and approved (V2.5 is the previous baseline)
 - Scope of application: New features, upgrades to existing features, defect fixes, technology migrations, data migrations, architectural refactoring, and other software development tasks
 - Author and maintainer: Richy
+- V3.0 revision: Tiffany-Dev (Hermes resident Coordinator); independent review: Codex
 - Current scheduling implementation: Hermes (replaceable; the standard is not bound to it)
+
+## V2.5 → V3.0 Upgrade Summary
+
+V3.0 is not a feature list. It is an upgrade in **standard maturity**: each real problem exposed by the V2.5 production iteration has been converted into a general rule, a mechanical gate, or a data-driven policy.
+
+### 1. Abstraction: concrete practices become portable rules
+
+- **Contract and implementation separation**: the standard defines only role contracts, properties, and acceptance criteria; scripts, endpoints, and vendor configuration move to instance records. The standard is portable across projects and machines;
+- **Execution carriers are no longer static**: available carriers and allocation rules are defined solely by the versioned **Carrier Policy Artifact**, with controlled and auditable changes;
+- **Event sources are classified by function**: push, polling, write-back, human freeze, and scheduled reconciliation can change channels without changing the standard.
+
+### 2. Process repair: closing gaps exposed by real incidents
+
+Each item corresponds to a real incident from practice:
+
+- **Scheduling-authority competition** (duplicate dispatch caused by dual drivers) → atomic conditional `CoordinatorEpoch` takeover plus authorized recovery after owner loss;
+- **Record identity reuse** (two executions sharing one `RecordID`) → globally unique `RecordID` (ULID), conflict freeze, and mapping audit;
+- **Verification-environment drift** (main checkout passes while clean checkout fails) → mandatory clean-checkout homomorphic gate for L2+ plus a declared configuration fallback source;
+- **Verbal expansion of waivers** (different root causes hidden behind one error code) → seven-item waiver boundary tuple, invalid if incomplete;
+- **“Completed but no conclusion”** (a response with no business result consumed as success) → execution-failure classification, one bounded resend, and an attempt limit preventing loops.
+
+### 3. Mechanical gates: rules move from “read and remember” to “pass the gate”
+
+- Fail-closed pre-dispatch gate: eight checks block dispatch, and a damaged policy rejects all dispatches;
+- Every dispatch records `PolicyVersion` and the policy digest, making it possible to answer later why a carrier was selected.
+
+### 4. Permission-model redesign
+
+- Unified `danger-full-access` (the inability of the read-only sandbox to compile and verify was established by testing);
+- **Code Immutability Constraint** offsets the permission expansion: Reviewers work in isolated verification workspaces and reconcile candidate integrity in both directions before and after review.
+
+> The complete revision basis and ten-round review record are in `V3.0-proposal.md` on the `3.0` branch (archived historical proposal).
 
 ---
 
