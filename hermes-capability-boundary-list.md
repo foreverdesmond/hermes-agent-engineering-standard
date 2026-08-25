@@ -48,14 +48,7 @@
 |---|---|
 | Supported syntax | Period intervals / standard schedule expressions / one-shot timestamps (concrete syntax registered in the instance capability record) |
 | Minimum precision | **Minute-level** (no second-level) |
-| Can it carry scheduling reconciliation | **Yes**. cron reconciles once per minute, handling pending records and health checks, consistent with "event + cron fallback" |
-
-## 5. Agent Dispatch Capability (Hermes → each carrier)
-
-| Carrier | Dispatch method | Sync? | Reconciliation method | Git permission |
-|---|---|---|---|---|
-| **WorkBuddy** | Feishu post message @WB | Async (one-way delivery) | Passively wait for WB interactive reply + cron fallback | ✅ commit allowed by default |
-| **Codex** | `POST /v1/threads` (gateway) | Sync (wait) / Async | Actively poll `/threads/:id` | ⚠️ requires `sandbox:danger-full-access` |
+| Can it carry scheduling reconciliation | **Yes**. Scheduled reconciliation meets the agreed time limit, handling pending records and health checks, consistent with "events + fallback" |
 
 ## 5. Agent Dispatch Capability (V3.0: abstract conclusions)
 
@@ -127,4 +120,5 @@
 5. The "privileged operations governance" shared skill (name in the instance record) is a mandatory principle across all profiles.
 
 | V3.0-draft | 2026-08-24 | Tiffany-Dev | Deployment form changed to multi-driver + CoordinatorEpoch FencingToken (original single-machine single-instance corollary voided); unified danger-full-access (incl. Review, Code Immutability Constraint); added privileged-operation boundaries (cross-profile isolation / rejection-to-human / OPS-AUDIT). See the V3.0 appendix at the end |
+| V3.0 errata | 2026-08-25 | Hermes | WB review F-002: removed residual concrete-carrier dispatch table in §5 (deployment facts belong to the instance registry); §4 reconciliation wording abstracted |
 | V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all ten review rounds closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |

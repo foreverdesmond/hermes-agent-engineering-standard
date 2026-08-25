@@ -353,6 +353,19 @@ Recovery must record `Resumed`, and first perform unconsumed-event reconciliatio
 - Two active scheduling drivers for the same `IterationID` are prohibited. A second driver must remain read-only or stop; it may not dispatch, consume signals, or advance state.
 - “Pause” changes only `Paused=true` and does not transfer ownership. “Resume scheduling” clears the pause and returns ownership to cron; interactive takeover requires an explicit owner-transfer instruction.
 
+### 12.4 Carrier Policy and Change Control (V3.0)
+
+- The **sole source of truth** for carrier-selection rules is the "Carrier Policy Artifact" (a versioned data file carrying `PolicyVersion` and `PolicyArtifactDigest`); the spec text no longer enumerates concrete carrier allocations.
+- **Dual-layer change channel**:
+
+| Change type | Example | Channel |
+|---|---|---|
+| Contract/schema change | Alters field structure, authorization model, fail-closed semantics, or acceptance logic | Spec change review (05 §6.3) |
+| Instance-content change | Carrier temporarily unavailable, priority adjustment, quota change | Controlled runtime change: project owner announces → update artifact (version+1) → write a `PolicyChange` Signal in the ledger (recording authorizer / digest / scope of effect) → gates adopt the new version automatically |
+
+- **Mandatory dispatch gate**: every dispatch must pass the pre-dispatch gate implementation check (fail-closed); items include at least: complete intent fields, globally unique RecordID (§6.2), carrier available and matching the policy artifact, single-thread constraint, scheduling pause gate, dependencies satisfied, and candidate SHA origin-reachable. The policy snapshot is recorded at task/stage level (§5.3): each dispatch's task record carries the then-effective PolicyVersion / PolicyArtifactDigest / DispatchedCoordinatorEpoch—iteration-level fields reflect only current state and cannot answer why a historical dispatch chose its carrier.
+- When the gate verdict is BLOCKED, stop and escalate to the project owner; bypassing is prohibited.
+
 ## 13. Recovery Protocol (Three Tiers)
 
 | Tier | Trigger | Hermes action | Failure handling |
