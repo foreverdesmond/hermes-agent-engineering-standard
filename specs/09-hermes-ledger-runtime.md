@@ -1,12 +1,12 @@
 # Hermes Ledger & Runtime Spec
 
-> Spec version: V2.5
-> Document status: Approved (V2.5 final baseline)
+> Spec version: V3.0
+> Document status: Approved (V3.0 final baseline)
 > Applicability: development iterations led by the resident Coordinator (Hermes), with WorkBuddy / Codex / Human collaborating in parallel
 > Predecessor: `09-Scheduling Control Plane & Runtime Ledger Spec` (V2.4, Codex thread as Coordinator)
-> Revised: 2026-08-21
+> Revised: 2026-08-24
 > Foundation: *Hermes Capability Boundary List* (measured capability), *Hermes Process & Boundary Resolution* (boundary decisions)
-> Author: WorkBuddy (rewrite)
+> Author: Tiffany-Dev (V3.0 revision; initial rewrite = WorkBuddy)
 > Reviewer: Richy (approved)
 
 ## 1. Purpose and Single Responsibility
@@ -34,7 +34,7 @@ This spec does not authorize business-code modification, external operations, Re
 4. **Document-first publish, at-least-once consumption**: the subtask first reports results; re-reading the same record is allowed, but producing a side effect twice is not.
 5. **Maximum-safe state**: on recovery, restore only to the highest state the evidence supports; unprovable content stays pending-verification.
 6. **Control-plane failure does not pollute business state**: dispatch, event-read, or ledger-write failures must not be disguised as code `Blocked` or a Review Finding.
-7. **Single-instance idempotency**: Hermes is single-machine, single-instance, with no competing Coordinators; idempotency is guaranteed by `DispatchKey` dedup, with no coordination-lease lock.
+7. **Single-owner idempotency**: Hermes is single-machine, and each iteration has exactly one current scheduling owner identified by the monotonically increasing `CoordinatorEpoch`; idempotency is guaranteed by `DispatchKey` dedup and stale-Epoch fencing, with no coordination-lease lock.
 8. **Event-driven + cron fallback**: events (Feishu long-connection / Codex gateway polling) take priority, cron periodic reconciliation is the fallback; lost events do not affect correctness.
 9. **Explicit execution-mechanism configuration**: each dispatch records `ExpectedExecutionKind`, model, and sandbox; the execution carrier may not be substituted without authorization.
 
@@ -203,15 +203,13 @@ Hermes → execution carrier:
 - When a dispatch-create call fails, register `ControlPlaneError`, do not register business `Blocked`, and do not fall back to another execution mechanism (unless the project owner approves `ApprovedEquivalent`).
 - **Carrier-unavailable escalation threshold**: if the same execution carrier (identified by `ExecutionRef`) fails dispatch/read consecutively **3 times** and remains unavailable, Hermes must not keep spinning and retrying; it must escalate and alert the project owner (Richy); only when Richy approves `ApprovedEquivalent` may an equivalent carrier be substituted, otherwise keep `Provisioning`/`NeedsAttention`/`PendingVerification` and wait for Richy to intervene.
 
-### 7.3 Sandbox Tiers and Git Authorization
+### 7.3 Sandbox and Git Authorization (V3.0)
 
 | Task type | sandbox | Note |
 |---|---|---|
-| Read-only investigation / code review | read-only | Reviewer, read-only investigation |
-| Write document / write evidence | workspace-write | Does not touch `.git` |
-| **Needs git commit** (development / integration (incl. merge) / doc design) | danger-full-access | `.git` is a protected path under workspace-write |
+| Any Codex dispatch (development / Review / integration / documentation) | danger-full-access | Unified policy; the carrier policy artifact is the source of truth |
 
-Roles needing `git add/commit/merge/push` (Implementer, Integrator, Doc/Design Reviewer—the latter needs to commit design/work-package/context documents) use `danger-full-access`. Reviewer and Validator are read-only sandboxes. Hermes does not perform git on their behalf; worktree creation is done by the Implementer (Hermes only dispatches TaskID/base branch/worktree directory), review is entered read-only by the Reviewer, and cleanup is uniformly executed by the Integrator (see *Hermes Process & Boundary Resolution* C5/D2/D3b).
+All Codex roles use `danger-full-access` for dispatch consistency. This does not grant Reviewers or Validators permission to alter the reviewed business source: they may build and test, but **MUST NOT** modify tracked business source, candidate commits, or merge. Hermes must reconcile `HEAD` and the worktree tree before and after Review/Validation; any unexpected change invalidates the conclusion. Hermes does not perform git on behalf of the carrier.
 
 ## 8. State Production and Consumption Protocol
 
@@ -342,9 +340,18 @@ Recovery must record `Resumed`, and first perform unconsumed-event reconciliatio
 
 ### 12.2 Concurrency and Parallelism
 
-- Hermes is single-machine, single-instance, with no competing Coordinators, **no coordination-lease lock**; duplicate side effects are blocked by `DispatchKey` idempotent dedup.
+- Hermes is single-machine, with exactly one current Coordinator owner per iteration, **no coordination-lease lock**; duplicate side effects are blocked by `DispatchKey` dedup and stale-Epoch fencing.
 - Multiple tasks may run in parallel; tasks with conflicts (shared files / same worktree) are not set parallel; if a conflict actually arises, ask the project owner to coordinate (*Hermes Process & Boundary Resolution* C2).
 - One task keeps only one valid execution instance at the same stage, unless split into non-conflicting subtasks.
+
+### 12.3 Coordinator Ownership and Handover (V3.0)
+
+- Every iteration has exactly one current Coordinator owner. The scheduling authority is fenced by `CoordinatorEpoch`; dispatch and signal consumption from a non-current Epoch **MUST** be rejected.
+- `CoordinatorEpoch` is monotonically increasing. A takeover is valid only when the expected current Epoch and `StateRevision` still match at the atomic compare-and-swap point; otherwise it fails and the caller must re-read the ledger.
+- A normal handover uses a unique `TransferID` and requires acknowledgement from both the old and new owner. The new owner may dispatch only after the handover is durably recorded.
+- If the old owner is lost for the configured `LostOwnerTimeout` (default: two reconciliation cycles), recovery takeover still requires Richy's authorization. Timeout alone does not silently transfer ownership.
+- Two active scheduling drivers for the same `IterationID` are prohibited. A second driver must remain read-only or stop; it may not dispatch, consume signals, or advance state.
+- “Pause” changes only `Paused=true` and does not transfer ownership. “Resume scheduling” clears the pause and returns ownership to cron; interactive takeover requires an explicit owner-transfer instruction.
 
 ## 13. Recovery Protocol (Three Tiers)
 
@@ -455,3 +462,5 @@ Hermes may schedule a real iteration only when the project has configured the He
 | V2.5 (pending review) | 2026-08-20 | Hermes | Added 7 process gaps: §3.2 added ContextGenerationPending; §6.1 added CI/integration-verification writeback + candidate-freeze human-gated event; §7.2/§8 carrier-unavailable 3-consecutive escalation to Richy; §11.1 stall detection (incl. IntegrationVerified timeout escalation); §13.1 recovery escalation threshold (hot→cold→disaster, hot 3 times); §14.1 CanaryFailed state + handling path + 3-consecutive alert Richy |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
 | V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |
+| V3.0-draft | 2026-08-24 | Hermes | Added the Carrier Policy Artifact contract, PolicyArtifactDigest, CoordinatorEpoch fencing, atomic conditional takeover, TransferID, LostOwnerTimeout, and the single-owner / dual-driver prohibition; unified Codex dispatch on danger-full-access and added the Code Immutability Constraint |
+| V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all review rounds closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |
