@@ -300,7 +300,7 @@ Each item corresponds to a real incident from practice:
 
 ### 3. Mechanical gates: rules move from “read and remember” to “pass the gate”
 
-- Fail-closed pre-dispatch gate: eight checks block dispatch, and a damaged policy rejects all dispatches;
+- Fail-closed pre-dispatch gate: the mandatory pre-dispatch checklist (07 §8.1) blocks dispatch when any required item fails, and a damaged policy rejects all dispatches;
 - Every dispatch records `PolicyVersion` and the policy digest, making it possible to answer later why a carrier was selected.
 
 ### 4. Permission-model redesign
