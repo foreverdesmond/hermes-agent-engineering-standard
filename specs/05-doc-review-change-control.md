@@ -1,11 +1,11 @@
 # Document Review & Change-Control Spec
 
-> Spec version: V2.5
-> Document status: Approved (V2.5 final baseline)
+> Spec version: V3.0
+> Document status: Approved (V2.5 is the previous baseline; finalized 2026-08-24, Richy final review passed)
 > Applies to: background analysis, requirements specification, detailed design, detailed development task, and their subsequent revisions
-> Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
+> Author: Tiffany-Dev (V3.0 revision; initial version = WorkBuddy)
 > Finalized: 2026-08-11
-> Revised: 2026-08-20
+> Revised: 2026-08-24
 > Reviewer: Richy (approved)
 
 ## 1. Purpose
@@ -27,7 +27,7 @@ Propose → Record → Analyze impact → Pending review → User confirms → W
 - Only the project owner can declare a document approved overall;
 - May authorize specific independent execution tasks to perform code, database, external-system, and Git operations, but the authorizations do not automatically include each other; database or persistent-state authorization must not be transferred to CodingTask, ReworkTask, Reviewer, or ordinary merge tasks.
 
-### 2.2 Execution Agent (WorkBuddy / Codex)
+### 2.2 Execution Agent
 
 - Responsible for investigation, raising questions, comparing approaches, editing documents, and maintaining status;
 - For obvious errors, provide evidence and reasoning; do not mechanically please;
@@ -159,6 +159,21 @@ Verification or real-run defect found
 
 Do not bypass requirements or design changes by only modifying the detailed development task.
 
+## 6.3 Change Control for External Contract Artifacts (V3.0 new)
+
+A spec may reference **external contract artifacts** outside the repository (such as the "carrier policy artifact"—a versioned data file defining available execution carriers and allocation rules). Such artifacts together with the spec text form the behavioral contract, and their changes are controlled through a **dual-layer channel**:
+
+| Change type | Judgment | Channel |
+|---|---|---|
+| **Contract/schema change** | Alters the artifact's field structure, authorization model, fail-closed semantics, or acceptance logic | Follows this spec's change review (equivalent to a spec errata, with linked versions) |
+| **Instance-content change** | Runtime facts such as a carrier being temporarily unavailable, priority adjustments, or quota changes | Controlled runtime change: the project owner announces → update the artifact (version+1) → write a `PolicyChange` Signal in the runtime ledger (recording authorizer / PolicyArtifactDigest / scope of effect) → gates adopt it automatically; **does not go through document review** |
+
+Rules:
+
+- Every dispatch's runtime ledger must record the then-effective `PolicyVersion` and `PolicyArtifactDigest`, so that "why that carrier was chosen at the time" is auditable afterwards;
+- The spec text references only the artifact's **contract clauses** (role, nature, acceptance criteria) and must not copy the artifact's contents—preventing one rule from having two potentially drifting sources of truth;
+- After a contract/schema change is completed, all spec files referencing the artifact must be checked and synchronized with errata.
+
 ## 7. Change Requests During Development
 
 When the following occur during development, pause the relevant task:
@@ -202,7 +217,7 @@ The document's first-page status, end review checklist, and README index must be
 
 The detailed-task section, the master state table, and the structured task-state-exchange area within the same document must be consistent. There must be no case where the task body says `TaskAccepted` while the master table still says `InProgress`.
 
-The project must specify both a unique `CanonicalTaskDocumentPath` and the Hermes ledger `LedgerLocation`. The former holds the Git-managed task definition and most recent persistent snapshot; the latter is the Hermes single-instance-maintained, Git-excluded sole real-time source of truth for task runtime state (local JSON state file + optional SQLite). Chat context, UI state, cross-task read API, document snapshot, and derived ledger must not override a higher `StateRevision` in the ledger.
+The project must specify both a unique `CanonicalTaskDocumentPath` and the Hermes ledger `LedgerLocation`. The former holds the Git-managed task definition and most recent persistent snapshot; the latter is the Git-excluded sole real-time source of truth for task runtime state, maintained by the current CoordinatorEpoch owner (concurrency model: 09 §12.3) (local JSON state file + optional SQLite). Chat context, UI state, cross-task read API, document snapshot, and derived ledger must not override a higher `StateRevision` in the ledger.
 
 Routine updates to the state-exchange area do not change the immutable task definition identified by `TaskDocumentBaselineRef`, nor automatically invalidate code candidate, test, or Review. Task-definition changes outside the state-exchange area must still be reviewed per this spec.
 
@@ -357,3 +372,8 @@ Review is truly complete only when the formal document has saved all key decisio
 | V2.5 | 2026-08-20 | Hermes | Review revision: §3.2/§12 unified standalone Codex into Execution Agent |
 | V2.5 | 2026-08-20 | Hermes | Cleaned V2.4 remnants: removed "lease" with no corresponding concept (single-instance, no coordination-lease lock) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+| V3.0-draft | 2026-08-24 | Hermes | V3.0 revision (proposal v5): added §6.3 change control for external contract artifacts—dual-layer channel (contract/schema changes go through spec review; instance-content changes go through controlled runtime change), dispatch ledger records PolicyVersion+PolicyArtifactDigest; specs reference contract clauses only without copying artifact contents |
+
+| V3.0-draft-2 | 2026-08-24 | Tiffany-Dev | §8.2 ledger maintainer changed to "maintained by the current CoordinatorEpoch owner" (aligned with 09 Epoch concurrency model, removing single-instance wording remnants) |
+
+| V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all ten review rounds (proposal v1-v5 plus nine body rounds) closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |
