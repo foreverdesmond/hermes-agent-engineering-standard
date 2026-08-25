@@ -1,8 +1,10 @@
 # V2.5 Hermes Coordinator Mode · Process & Boundary Resolution
 
-> Status: Archived (for reference; discussion retained as record)
+> Status: **Archived (historical decision basis; not a normative entry point)**
+> Nature: positioned the same as V3.0-proposal.md—records historical discussions and decision basis; not current executable rules;
+> Feishu knowledge base, TG, deepseek, etc. mentioned here are historical deployment facts; current rules are governed by the body of `specs/`.
 > Date: 2026-08-20
-> Participants: Richy + Hermes (Tiffany), continuing historical review discussions and migration design (related research / review / upgrade-plan documents archived to the Feishu knowledge base under "Historical Documents")
+> Participants: Richy + Hermes (Tiffany), continuing historical review discussions and migration design (related research / review / upgrade-plan documents archived to an external knowledge base; location registered in the instance record)
 > Note: This document records the **complete process** and **all boundary resolutions** that Richy and Hermes confirmed item by item during the Hermes V2.5 migration. It is the implementation-level refinement of the review report / upgrade plan, and serves as the factual baseline for the subsequent "Hermes Capability Boundary List" and the implementation schedule.
 
 ---
@@ -58,7 +60,7 @@ Release → production/main
 | Consolidated Role | Core Responsibility | Key Boundary |
 |---|---|---|
 | Implementer (development) | First-time development + rework + L0 unit tests | Only in own feature branch; runs L0 and records evidence; does not approve own work |
-| Reviewer (review) | Review development output (diff/commit) | Based on diff + developer L0 evidence, only spot-checks critical paths, does not re-run the full suite; read-only, does not merge |
+| Reviewer (review) | Review development output (diff/commit) | Based on diff + L0 evidence, only spot-checks critical paths, does not re-run the full suite; V3.0 Code Immutability Constraint (danger-full-access + isolated verification workspace), does not merge |
 | Integrator (integration) | Merge feature → iteration | Only merges precisely approved commits; resolves conflicts; does not review own merge |
 | Validator (test verification) | Full test after merge (L1 + regression) | Runs full suite on integration branch; read-only / test environment; does not merge |
 | Doc/Design Reviewer (documentation/design review) | All document review + design + work-package/context | Pure documentation belongs to it; low-risk design not reviewed, high-risk reviewed by another of same role |
@@ -83,8 +85,8 @@ Hard floor retained: development separated from review; merge execution separate
 | # | Resolution Item | Conclusion |
 |---|---|---|
 | D1 | danger-full-access usage | Available to any role that needs commit permission (development / integration / design) |
-| D2 | worktree lifecycle | Creation = Implementer (Plan Y); use = Implementer; review = Reviewer read-only; cleanup = Integrator unified |
-| D3 | How Reviewer obtains snapshot | **D3b: Reviewer enters the developer's worktree directly for read-only review** (strictly serial, non-overlapping; developer read/write, reviewer read-only; one development agent owns one feature; avoids losing git-excluded local content across worktrees) |
+| D2 | worktree lifecycle | Creation = Implementer (Plan Y); use = Implementer; ~~review = Reviewer read-only~~ → V3.0: Reviewer uses an isolated detached verification workspace; cleanup = Integrator unified |
+| D3 | How Reviewer obtains snapshot | ~~**D3b: Reviewer enters the developer's worktree directly for read-only review**~~ (superseded by V3.0: changed to isolated detached verification workspace + Code Immutability Constraint, see 09 §7.3) (strictly serial, non-overlapping; developer read/write, reviewer read-only; one development agent owns one feature; avoids losing git-excluded local content across worktrees) |
 
 ### E. Responsibility for Requirements / Design / Task Breakdown
 
@@ -138,3 +140,16 @@ Core principle: tests are run once by the responsible party, others review based
 ---
 
 *This document is a record of the Hermes migration discussion; concrete execution is implemented by Hermes per the subsequent "Hermes Capability Boundary List" and the dispatch mechanism.*
+
+
+---
+
+## V3.0 Appendix (revised by Tiffany-Dev, 2026-08-24): Scheduling-Concurrency Control Model
+
+V2.5 assumed "single-machine single instance, no coordination-lease lock"; from V3.0 onward, scheduling authority may be competed for by the coordinating cron and interactive sessions.
+The concurrency model is now **CoordinatorEpoch (FencingToken)**:
+
+- At any moment there is exactly one Epoch owner; dispatch/consumption from an old Epoch is always rejected;
+- Takeover = atomic conditional update (effective only when Epoch+StateRevision match);
+- Normal handover requires dual acknowledgement; after the old instance is lost beyond LostOwnerTimeout, recovery takeover requires Richy's authorization;
+- Full protocol in 09 §12.3; carrier-policy change channel in 09 §12.4 and 05 §6.3.
