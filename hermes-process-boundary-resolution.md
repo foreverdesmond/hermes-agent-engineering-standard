@@ -1,7 +1,7 @@
 # V2.5 Hermes Coordinator Mode · Process & Boundary Resolution
 
 > Status: **Archived (historical decision basis; not a normative entry point)**
-> Nature: positioned the same as V3.0-proposal.md—records historical discussions and decision basis; not current executable rules;
+> Nature: an archived historical record—documents historical discussions and decision basis; not current executable rules (the upgrade proposal itself remains in the Chinese source repository);
 > Feishu knowledge base, TG, deepseek, etc. mentioned here are historical deployment facts; current rules are governed by the body of `specs/`.
 > Date: 2026-08-20
 > Participants: Richy + Hermes (Tiffany), continuing historical review discussions and migration design (related research / review / upgrade-plan documents archived to an external knowledge base; location registered in the instance record)
@@ -42,7 +42,7 @@ Release → production/main
 |---|---|---|
 | A1 | Hermes tracking-ledger carrier | Decided by Hermes (leaning SQLite); the subsequent "Hermes Capability Boundary List" to be completed independently by Hermes |
 | A2 | Event source & periodic reconciliation | **Message-receiving + scheduled polling (≈1 minute) dual channel**; Feishu push may be lost (empirically confirmed: WB replied but Hermes did not receive it), so polling is needed as a fallback |
-| A3 | Deployment form | **Single-machine, single-instance** (subject to Hermes confirmation: one server running one Hermes produces only a single instance) |
+| A3 | Deployment form | ~~**Single-machine, single-instance**~~ → V3.0: multiple drivers may compete for scheduling authority, held uniquely by the CoordinatorEpoch FencingToken (see 09 §12.3 and the appendix at the end) |
 | A4 | Recovery semantics | **Hot**: a single anomaly auto-resumes from the most recent ledger snapshot; **Cold**: after restart, fully automatically reads ledger + Git to rebuild, escalating to disaster level on failure; **Disaster**: ledger lost/corrupted (or cold recovery failed), rebuild from Git task-document snapshot, requires Richy's intervention and approval |
 | A5 | cron precision | Confirmed by Hermes as to minimum precision and whether it can carry scheduling reconciliation |
 

@@ -15,8 +15,8 @@
 
 | Item | Confirmed Result |
 |---|---|
-| Deployment form | **Single-machine, single-instance** (one server runs one Hermes, producing only one scheduler instance) |
-| Inference | No multi-Coordinator contention → **no coordination-lease lock needed**; idempotency guaranteed by `DispatchKey` deduplication |
+| Deployment form | ~~**Single-machine, single-instance**~~ → V3.0: multiple drivers may compete for scheduling authority, held uniquely by the CoordinatorEpoch FencingToken with atomic conditional takeover (see 09 §12.3 and the V3.0 appendix at the end) |
+| Inference | ~~No multi-Coordinator contention → no coordination-lease lock needed~~ → V3.0: multi-driver competition for scheduling authority arbitrated by the CoordinatorEpoch FencingToken; idempotency guaranteed by `DispatchKey` dedup + Epoch validation |
 | Residency | **Resident service** (not a temporary thread), running continuously, naturally acting as the "Coordinator" |
 
 ## 2. State Persistence / Ledger Carrier
@@ -24,7 +24,7 @@
 | Item | Confirmed Result |
 |---|---|
 | Own storage | The Hermes framework uses a **SQLite session library** to store sessions / memory (framework-level, not the scheduling ledger) |
-| Project ledger carrier | **Local JSON state file** (within the project directory, **not in Git**) + optional SQLite; maintained by Hermes |
+| Project ledger carrier | **Local JSON state file** (within the project directory, **not in Git**) + optional SQLite; maintained by the current CoordinatorEpoch owner |
 | Ledger contents | Task / stage / status / evidence pointer / dependency graph / scheduling consumption watermark (ConsumedRevision) |
 | Immutable snapshot | The `TASK-STATE-EXCHANGE` block of the development task document remains the **Git persistent snapshot** (for restart / disaster recovery) |
 | Durable recoverability | Ledger is persisted; Hermes can read the ledger + Git to rebuild after restart |

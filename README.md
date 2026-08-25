@@ -316,7 +316,6 @@ Each item corresponds to a real incident from practice:
 - Unified `danger-full-access` (the inability of the read-only sandbox to compile and verify was established by testing);
 - **Code Immutability Constraint** offsets the permission expansion: Reviewers work in isolated verification workspaces and reconcile candidate integrity in both directions before and after review.
 
-> The complete revision basis and ten-round review record are in `V3.0-proposal.md` on the `3.0` branch (archived historical proposal).
 
 ---
 
