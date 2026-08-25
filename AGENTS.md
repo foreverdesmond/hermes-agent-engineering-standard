@@ -41,7 +41,7 @@ An agent should read "the single `AGENTS.md` closest to the file it is currently
 |---|---|
 | Repository nature | **Multi-agent development collaboration standards library** (pure documentation repository, no source-code engineering) |
 | Tech stack | Pure Markdown (`.md`); no build/compile/test commands |
-| Spec status | V3.0-draft under revision (V2.5 is the previous approved baseline); the upgrade work is on the `v3.0` branch |
+| Spec status | V3.0 approved (finalized 2026-08-24; V2.5 is the previous approved baseline); the upgrade work is on the `v3.0` branch |
 | Scheduling model | **Hermes resident Coordinator** + parallel execution by the carriers designated by the Carrier Policy Artifact |
 
 ## 4. Branch Strategy
