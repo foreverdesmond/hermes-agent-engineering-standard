@@ -41,7 +41,7 @@ An agent should read "the single `AGENTS.md` closest to the file it is currently
 |---|---|
 | Repository nature | **Multi-agent development collaboration standards library** (pure documentation repository, no source-code engineering) |
 | Tech stack | Pure Markdown (`.md`); no build/compile/test commands |
-| Spec status | V3.0-draft under revision (V2.5 is the previous approved baseline); proposal and body are on the `3.0` branch |
+| Spec status | V3.0-draft under revision (V2.5 is the previous approved baseline); the upgrade work is on the `v3.0` branch |
 | Scheduling model | **Hermes resident Coordinator** + parallel execution by the carriers designated by the Carrier Policy Artifact |
 
 ## 4. Branch Strategy
@@ -51,7 +51,7 @@ An agent should read "the single `AGENTS.md` closest to the file it is currently
 | `main` | Stable branch | Approved baseline, merged by an independent merge task after authorization |
 | `V2.5` (uppercase remote) | Current development branch | Hermes migration development branch |
 
-**Branch naming warning**: historical V2.5 local and remote branch names differed in case (pushes require an explicit refspec; see the instance run record for the exact command); V3.0 revisions are made on the `3.0` branch.
+**Branch naming warning**: historical V2.5 local and remote branch names differed in case (pushes require an explicit refspec; see the instance run record for the exact command); V3.0 revisions are made on the `v3.0` branch.
 
 ## 5. Git and Tool Permissions (Sandbox Tiers)
 
@@ -97,7 +97,8 @@ All specification documents in this repository follow unified conventions:
 | V1.0 | 2026-08-20 | WorkBuddy | Initial creation: established Context L1 standard entry point, closest-wins priority, project overview, branch strategy, sandbox tiers, documentation conventions |
 | V1.1 | 2026-08-20 | WorkBuddy | §3 spec status updated to V2.5 pending review (V2.3 is the previous approved baseline) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as the official V2.5 baseline |
+| V2.5 errata | 2026-08-21 | WorkBuddy | Corrected §3 status from “V2.5 pending review” to “V2.5 approved,” consistent with the document header and finalization record |
 
-| V3.0-draft | 2026-08-24 | Hermes | Synchronized the V3.0 revision (proposal v5): updated §3 to V3.0-draft; changed §5 to unified danger-full-access plus the Reviewer Code Immutability Constraint; added scheduling concurrency (CoordinatorEpoch handover protocol) and pre-dispatch gate guidance. See `V3.0-proposal.md` on the `3.0` branch |
+| V3.0-draft | 2026-08-24 | Hermes | Synchronized the V3.0 revision (proposal v5): updated §3 to V3.0-draft; changed §5 to unified danger-full-access plus the Reviewer Code Immutability Constraint; added scheduling concurrency (CoordinatorEpoch handover protocol) and pre-dispatch gate guidance. See the source repository's archived `V3.0-proposal.md` |
 
 | V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all ten review rounds (proposal v1-v5 plus nine body rounds) closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |
