@@ -1,12 +1,12 @@
 # Development Task Spec
 
-> Spec version: V2.5
-> Document status: Approved (V2.5 final baseline)
+> Spec version: V3.0
+> Document status: Approved (V2.5 is the previous baseline; finalized 2026-08-24, Richy final review passed)
 > Document positioning: transforms the approved design into dispatchable, reviewable, combinable-verifiable development tasks
 > Prerequisite gate: applicable requirements and detailed design have been approved; exploration tasks excepted
-> Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
+> Author: Tiffany-Dev (V3.0 revision; initial version = WorkBuddy)
 > Originally finalized: 2026-08-11
-> Revised: 2026-08-21
+> Revised: 2026-08-24
 > Reviewer: Richy (approved)
 
 ## 1. Single Responsibility
@@ -151,7 +151,7 @@ Tasks must first be classified by responsibility; the same task must not simulta
 
 - Every real `CodingTask` must have a unique task branch and an independent worktree; the worktree is only a working directory, the branch is the task's ownership, the commit SHA is the review identity;
 - The developer and rework executor may only create local commits on their own task branch; they must not directly commit or merge into the iteration development branch, long-term integration branch, stable branch, or main branch;
-- Coding Reviewer, System Reviewer, and final-merge Reviewer are all read-only roles; they must not make a candidate pass by modifying it;
+- Coding Reviewer, System Reviewer, and final-merge Reviewer are subject to the **candidate-content immutability constraint**: in a danger-full-access sandbox they may still build, test, and write evidence, but must not make a candidate pass by modifying it;
 - Only an independent `IterationMergeTask` may merge the precise `TaskAccepted` commit into the iteration development branch;
 - Only an independent `MainMergeTask` may merge the precise candidate into the main branch after `MergeApproved` and explicit project-owner authorization;
 - Rework continues on the original task branch and produces a new commit; the new `HeadSHA` automatically invalidates the old Review conclusion.
@@ -262,33 +262,20 @@ Also give ideal, normal, and conservative (including one rework round) effort, m
 
 ### 8.1 Sole State Source of Truth
 
-The project must specify both the Git-managed detailed development-task document and the Hermes ledger (`LedgerLocation`). The detailed development-task document holds the task definition and the most recent persistent snapshot; the Hermes ledger (local JSON state file + optional SQLite, not in Git) is the sole real-time source of truth for task runtime state in the active iteration, maintained by the single Hermes instance.
+The project must specify both the Git-managed detailed development-task document and the Hermes ledger (`LedgerLocation`). The detailed development-task document holds the task definition and the most recent persistent snapshot; the Hermes ledger (not in Git) is the sole real-time source of truth for task runtime state in the active iteration, **maintained by the current CoordinatorEpoch owner** (concurrency model: 09 §12.3).
 
 `TaskDocumentBaselineRef` continues to identify the immutable task definition. Routine changes in the state-exchange area do not change the requirements, design, or code-review baseline of a dispatched task; any content change outside the state-exchange area still follows the document-change flow to judge whether it invalidates Context, Review, or dispatch.
 
 Hermes must no longer use cross-task API, UI state, or chat context as the task-state discovery entry. When the ledger is missing, recover from the persistent snapshot in the detailed development-task document and Git; do not overwrite a higher `StateRevision` in the ledger with an old snapshot.
 
-### 8.2 Minimal Ledger Structure
+### 8.2 Ledger Contract Reference (V3.0: schema no longer duplicated)
 
-`LedgerLocation` is maintained by Hermes and kept machine-readable; the `TASK-STATE-EXCHANGE` block in the detailed development-task document is only the most recent persistent snapshot, not a runtime write target.
+The detailed development-task document **no longer duplicates the ledger field lists**. The runtime ledger—including all iteration-level and task/stage-level required fields (including CoordinatorEpoch, PolicyVersion, PolicyArtifactDigest, MaxAutomaticAttempts, etc.)—must conform to the **09 §5 "Ledger State Surface" runtime-ledger contract**; this task's `TASK-STATE-EXCHANGE` block is only the most recent persistent snapshot, not a runtime write target.
 
-Iteration-level at least contains:
+State-semantics constraints (aligned with `09`):
 
-```text
-SchemaVersion, IterationID, CanonicalTaskDocumentPath, LedgerLocation,
-StateRevision, UpdatedAt, ConsumedRevision
-```
-
-Each development, Review, rework, integration, validation, or help stage uses an independent `RecordID`, at least containing:
-
-```text
-RecordID, TaskID, TaskType, Stage, InvocationID, ProducerRole,
-ExecutionRef, TaskState, SignalState, SignalRevision,
-ExecutionStatus, HeadSHA, ReviewTarget, Verdict, IntegrationCommit,
-ProducedAt, ConsumedAt, ConsumedBy, NextAction, Summary
-```
-
-`SignalState` uses only: `None`, `PendingConsumption`, `Consumed`, `Superseded`. The execution agent reports structured results through its carrier channel; after Hermes consumes it, it increments `SignalRevision` and `StateRevision` and writes `PendingConsumption`; only after Hermes completes verification and follow-up actions is it changed to `Consumed`. The same `RecordID + SignalRevision` is the idempotent consumption key.
+- `SignalState` uses only: `None`, `PendingConsumption`, `Consumed`, `Superseded`; the execution agent reports structured results through its carrier channel; after Hermes consumes them it increments `SignalRevision` and `StateRevision` and writes `PendingConsumption`; only after Hermes completes verification and follow-up actions is it changed to `Consumed`. The same `RecordID + SignalRevision` is the idempotent consumption key;
+- Carrier-selection basis is recorded as PolicyVersion / PolicyArtifactDigest / DispatchedCoordinatorEpoch (task level; see 09 §5.3).
 
 ### 8.3 Write and Idempotency Rules
 
@@ -296,7 +283,8 @@ ProducedAt, ConsumedAt, ConsumedBy, NextAction, Summary
 - Subtask start, help, completion, Review conclusion, rework commit, and integration result must first output a structured protocol header, then the final; the final is detailed evidence, not a state-discovery entry;
 - A subtask may only report its own status record; it must not update other tasks' summary status, approve its own implementation, or dispatch subsequent tasks;
 - Hermes is the sole writer of summary status and consumption confirmation; upon finding `PendingConsumption`, it reads the corresponding execution carrier by the precise `ExecutionRef` in the record;
-- Ledger write idempotency is guaranteed by `DispatchKey = IterationID + TaskID + Stage + TargetIdentity` and `RecordID + SignalRevision` deduplication (single-instance, lock-free);
+- Ledger write idempotency is guaranteed by `DispatchKey = IterationID + TaskID + Stage + TargetIdentity` and `RecordID + SignalRevision` deduplication; scheduling-authority uniqueness is guaranteed by the CoordinatorEpoch FencingToken (09 §12.3, V3.0);
+- Every dispatch records PolicyVersion / PolicyArtifactDigest / DispatchedCoordinatorEpoch (task-level fields);
 - On state-write failure, do not claim the state was published; Hermes's next reconciliation relies only on the ledger, not a full scan of all execution carriers;
 - The ledger must not store long logs, full diffs, or large finals; it stores only the summary, SHA, Verdict, execution reference, and next action needed for locating and verifying.
 
@@ -314,7 +302,7 @@ The task summary state uses:
 | ChangesRequested | Reviewer has raised Findings to close, awaiting authorized rework |
 | TaskAccepted | Level 0 passed |
 | MergePending | Passed Level 0, awaiting independent iteration-integration task |
-| Integrated | Precise approved commit merged into iteration development branch |
+| Integrated | Precise approved commit merged into the current iteration branch and push succeeded |
 | IntegrationVerified | Affected integration checks after merge passed |
 | Blocked | Has a clear block |
 | Cancelled | Approved cancellation |
@@ -332,7 +320,7 @@ Transient heartbeats and tool-call details need not be written to the Git docume
 - Authorized rework continues with the same task ID and original task branch, producing a new `HeadSHA` and invalidating the original Review conclusion;
 - Only after Review passes and evidence is valid does the Coordinator update `TaskAccepted`;
 - After `TaskAccepted`, an independent iteration-integration task merges the precise `HeadSHA`; the developer must not merge it themselves;
-- After dispatch, Hermes consumes the ledger via event (Feishu / Codex gateway polling) + cron fallback; only upon finding `PendingConsumption` does it read that record's `ExecutionRef` and process immediately;
+- After dispatch, Hermes consumes the ledger via event sources + scheduled reconciliation fallback; only upon finding `PendingConsumption` does it read that record's `ExecutionRef` and process immediately;
 - Cron reconciliation only reads the Hermes ledger and necessary Git facts; it does not iterate the task list, read carrier-by-carrier, or depend on cross-task API events;
 - Task creation, document-state production/consumption, pause, resume, and Canary follow `09-hermes-ledger-runtime.md`; when the ledger is unavailable, follow the recovery protocol and do not continue dispatching;
 - The project-explicitly-specified execution mechanism must not be substituted by another mechanism without authorization (no pseudo-independent self-review);
@@ -357,9 +345,13 @@ Transient heartbeats and tool-call details need not be written to the Git docume
 > Route: Lightweight / Standard / HighRisk
 > Risk: Low / Medium / High
 > TaskType: CodingTask / ReworkTask / IterationMergeTask / IntegrationValidationTask / MainMergeTask / DocumentationTask
-> Status: Planned
+> TaskState: <only the 09 §3.2 enumeration: Planned / ContextGenerationPending / Ready / InProgress / Submitted / InReview / ChangesRequested / ReworkInProgress / TaskAccepted / MergePending / Integrated / IntegrationVerified; bypass: Blocked / Cancelled>
+> CarrierStatus: <only the 09 §3.1 enumeration: NotCreated / Provisioning / Running / Idle / NeedsAttention / Completed / Unavailable / Cancelled>
+> VerificationStatus: Verified / VerifiedWithWaivers / Failed / NotRun / NotIssued (filled only by verification-class tasks)
 > InvocationID: <generated at dispatch; may be N/A at design time>
-> ExpectedExecutionKind: WorkBuddy / Codex / Human / ApprovedEquivalent
+> ExpectedExecutionKind: <determined by the current version of the carrier policy artifact; see 09 §12.4>
+> PolicyVersion: <recorded at dispatch>
+> PolicyArtifactDigest: <recorded at dispatch>
 > TaskBranch:
 > WorktreePath:
 > CodeBaseSHA:
@@ -454,3 +446,9 @@ Development tasks may start only when the track selection is reasonable, task bo
 | V2.5 (pending review) | 2026-08-20 | Hermes | §5.2 added dependency-graph cycle detection (reject registration and escalate Richy); §10 added Context L2 generation trigger (when ContextL2Policy=Required, first dispatch Doc/Design Reviewer to generate L2, consistent with 09 §3.2) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
 | V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |
+| V2.5 errata 2 | 2026-08-22 | Hermes | §8 state table `Integrated` definition adds "and push succeeded", per 08 §3.4 (the current iteration branch is authoritative; merging into a local-only integration branch must not count as Integrated) |
+| V3.0-draft | 2026-08-24 | Hermes | V3.0 revision (proposal v5): §11 task-brief template changed `ExpectedExecutionKind` from a static enumeration (WorkBuddy/Codex/Human) to "determined by the current version of the carrier policy artifact" (ref 09 §12.4), and added PolicyVersion and PolicyArtifactDigest as mandatory dispatch fields—eliminating the multi-source-of-truth conflict between the static enum and the dynamic carrier policy (V5 conflictsWithDocs zero-residue item) |
+
+| V3.0-draft-2 | 2026-08-24 | Tiffany-Dev | Three-field template state-domain strict-partition fix: TaskState uses only the 09 §3.2 enumeration (removing the misplaced NeedsAttention/Invalidated—the former belongs to CarrierStatus, the latter is not a TaskState); CarrierStatus uses only the eight states of 09 §3.1 (NeedsAttention homed); VerificationStatus fixed to five values with no cross-domain items. Eliminates state-domain mixing that left the scheduler unable to judge "re-dispatch / await verification / escalate to human" |
+
+| V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all ten review rounds (proposal v1-v5 plus nine body rounds) closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |
