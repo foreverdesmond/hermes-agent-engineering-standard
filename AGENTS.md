@@ -49,7 +49,7 @@ An agent should read "the single `AGENTS.md` closest to the file it is currently
 | Branch | Role | Description |
 |---|---|---|
 | `main` | Stable branch | Approved baseline, merged by an independent merge task after authorization |
-| `V2.5` (uppercase remote) | Current development branch | Hermes migration development branch |
+| `V2.5` (uppercase remote) | Historical V2.5 baseline branch | Retained only for historical reference; V3.0 work is on `v3.0` |
 
 **Branch naming warning**: historical V2.5 local and remote branch names differed in case (pushes require an explicit refspec; see the instance run record for the exact command); V3.0 revisions are made on the `v3.0` branch.
 
