@@ -24,7 +24,7 @@ Each dispatch uses:
 
 Angle-bracket fields must be replaced. Templates must not be dispatched blank, nor substitute for the executor's autonomous exploration.
 
-All async tasks must first fill `ProtocolVersion`, `IterationID`, `TaskID`, `InvocationID`, `ParentCoordinatorRef` (Hermes identity), and `ExpectedExecutionKind`. The designated execution mechanism (WorkBuddy / Codex / Human) must not be substituted without authorization; no pseudo-independent self-review; only when the project owner pre-approves `ApprovedEquivalent` is an equivalent mechanism allowed.
+All async tasks must first fill `ProtocolVersion`, `IterationID`, `TaskID`, `InvocationID`, `ParentCoordinatorRef` (Hermes identity), and `ExpectedExecutionKind`. The execution mechanism designated by the carrier policy artifact must not be substituted without authorization; no pseudo-independent self-review; only when the project owner pre-approves `ApprovedEquivalent` is an equivalent mechanism allowed.
 
 ## Templates
 

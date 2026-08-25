@@ -18,12 +18,12 @@ HermesInstanceRef: <hermes-instance-id>
 LedgerLocation: <ledger location>
 CanonicalTaskDocumentPath: <Git-managed task definition/snapshot path>
 TaskDocumentBaselineRef: <immutable-ref>
-CronInterval: <~1 minute; 5-field cron or equivalent>
+CronInterval: <scheduled reconciliation period; concrete frequency and scheduling syntax registered in the instance capability record>
 StopConditions: <stop-conditions>
 NotifyConditions: <notify-conditions>
 ```
 
-cron precision is minute-level (per *Hermes Capability Boundary List* §4). Events (Feishu / Codex gateway polling) are consumed first; cron fallback reconciliation covers event loss.
+Scheduled reconciliation has precision sufficient for the agreed time limit (concrete frequency registered in the instance capability record). Event sources (push/polling) are consumed first; scheduled reconciliation fallback covers event loss.
 
 ## 2. Per-Round Order
 

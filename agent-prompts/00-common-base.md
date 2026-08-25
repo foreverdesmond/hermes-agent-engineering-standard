@@ -1,10 +1,11 @@
 # Common Base (Hermes Injection Protocol)
 
-> Spec version: **V2.5 (draft)**
-> Document status: **Approved (V2.5 final baseline)**
+> Spec version: **V3.0**
+> Document status: **Approved (finalized 2026-08-24)**
 > Author: WorkBuddy (rewrite) / Hermes (dispatch-protocol design)
 > Created: 2026-08-20 (orig. V2.4 base)
-> Last updated: 2026-08-20
+> Last updated: 2026-08-24
+> Revised: Tiffany-Dev (V3.0, 2026-08-24)
 > Reviewer: Richy (approved)
 > Revision history: see end
 > Note: This file is the common base for all role prompts, injected by the Coordinator (Hermes) at dispatch. Angle-bracket fields are replaced by Hermes at dispatch; the execution agent must not rewrite identity fields itself.
@@ -25,14 +26,18 @@ StateRecordID: <unique record for this stage>
 ## 2. Execution Carrier and Role
 
 ```text
-ExpectedExecutionKind: WorkBuddy / Codex / Human / ApprovedEquivalent
+ExpectedExecutionKind: <determined by the current version of the carrier policy artifact>
 ExpectedModel: <expected-model-or-project-default>
-ModelProvider: openai / opencodex / N/A
+ModelProvider: <provider identifier allowed by the carrier policy artifact> / N/A
 Role: Implementer / Reviewer / Integrator / Validator / Doc/Design Reviewer / Coordinator
+PolicyVersion: <policy-version>                    # injected at dispatch
+PolicyArtifactDigest: <policy-artifact-digest>     # injected at dispatch
+CoordinatorEpoch: <current-epoch>                  # injected at dispatch; mismatch rejects this task
 ```
 
-- `ExpectedExecutionKind` is the actual execution carrier dispatched by Hermes, a four-tier enum; `ApprovedEquivalent` is used only when the project owner approves an equivalent mechanism.
-- Role and carrier have no fixed mapping; they are specified by the task list at design time (see `07`, `../specs/07-subagent-delegation-prompts.md`).
+- `ExpectedExecutionKind` is **not a static enumeration**: available carriers and allocation rules are defined solely by the current version of the "carrier policy artifact" (09 §12.4); `ApprovedEquivalent` is used only when the project owner approves an equivalent mechanism.
+- Role and carrier have no fixed mapping; they are determined jointly by the current policy artifact and task requirements (see `07` §2.1).
+- Every dispatch must inject the three fields PolicyVersion / PolicyArtifactDigest / CoordinatorEpoch; when an agent finds a field missing or inconsistent, it stops and reports.
 - Hermes is the `Coordinator`; it does not perform the sub-agent's Git and development duties; a sub-agent must not impersonate or absorb the Coordinator's duties.
 
 ## 3. Dispatch Parameters and Sandbox Tiers (Hermes Injection)
@@ -47,11 +52,13 @@ Sandbox tiers (per *Hermes Capability Boundary List* §6):
 
 | Task type | sandbox | Note |
 |---|---|---|
-| Read-only investigation / code review | read-only | Reviewer, read-only investigation |
+| All Codex dispatches (incl. Review/Validator) | danger-full-access | V3.0 unified permission; Reviewer/Validator subject to the Code Immutability Constraint (09 §7.3) |
 | Write document / write evidence file | workspace-write | Document work that does not touch `.git` |
 | **Needs git commit** (development / integration (incl. merge) / doc design) | danger-full-access | `.git` is a protected path under workspace-write and blocks git |
 
-Roles needing `git add/commit/merge/push` (Implementer, Integrator, Doc/Design Reviewer—the latter needs to commit design/work-package/context documents) must use `danger-full-access`; Reviewer and Validator are read-only sandboxes; Hermes does not perform git on their behalf—worktree creation / commit / merge is done by the respective role.
+All Codex dispatches uniformly use `danger-full-access` (the V2.5 read-only sandbox could not compile and run tests). Reviewer/Validator are subject to the **Code Immutability Constraint**: review in an isolated detached verification workspace, reconcile HEAD/tree before and after, do not modify business source / commit candidates / merge. Hermes does not perform git on their behalf—worktree creation is done by the Implementer.
+
+Privileged operations such as service or scheduled-task management and cross-profile service operations require Richy's authorization first and an OPS-AUDIT record (the concrete tool list is in the instance registry); a security rejection means hand over to a human, bypassing prohibited (governance rules applicable to this deployment; the concrete rule carrier is registered in the instance record).
 
 ## 4. Ledger and State Publication
 
@@ -62,8 +69,8 @@ StateRecordID: <unique record for this stage>
 ```
 
 - The Hermes ledger (local JSON state file + optional SQLite) is the **sole source of truth** for task runtime state; the `TASK-STATE-EXCHANGE` block is the **Git persistent snapshot** in the development-task document; their division of labor is defined by `../specs/09-hermes-ledger-runtime.md`. **The ledger must never be committed to Git—even with `danger-full-access` commit permission, no add/commit may include ledger files** (to prevent circular reference / self-contained hash).
-- The execution Agent **does not write the ledger directly**. On completion, help request, block, or forming a Review/integration conclusion, it outputs a **structured protocol header** (see each role template) through its carrier channel; Hermes consumes it via event (Feishu long-connection / Codex gateway polling) + cron fallback and writes it **idempotently into the ledger**.
-- Ledger-write idempotency is guaranteed by `DispatchKey = IterationID + TaskID + Stage + TargetIdentity` and `RecordID + SignalRevision` dedup (single-instance, lock-free).
+- The execution Agent **does not write the ledger directly**. On completion, help request, block, or forming a Review/integration conclusion, it outputs a **structured protocol header** (see each role template) through its carrier channel; Hermes consumes it via event sources + scheduled reconciliation fallback and writes it **idempotently into the ledger**.
+- Ledger-write idempotency is guaranteed by `DispatchKey = IterationID + TaskID + Stage + TargetIdentity` and `RecordID + SignalRevision` dedup; scheduling-authority uniqueness is guaranteed by the `CoordinatorEpoch` FencingToken (side-effect writes from a non-current Epoch are always rejected), no longer premised on "single-instance lock-free".
 
 ## 5. Branch and Candidate
 
@@ -118,3 +125,5 @@ Do not substitute another continuously-changing workspace path for these content
 | V2.5 (draft) | 2026-08-20 | Hermes | Added unified document header (version/status/author/reviewer/revision) |
 | V2.5 (draft) | 2026-08-20 | Hermes | Review revision: Role enum unified to Doc/Design Reviewer; §4 emphasizes ledger must never be committed to Git (prevent circular reference / self-contained hash) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+| V3.0-draft | 2026-08-24 | Hermes | V3.0 revision: §2 `ExpectedExecutionKind` four-tier enum changed to "determined by the current version of the carrier policy artifact", added the three injected fields PolicyVersion / PolicyArtifactDigest / CoordinatorEpoch; §4 idempotency premise changed to the Epoch FencingToken (removing single-instance lock-free wording); header raised to V3.0 |
+| V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all ten review rounds closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |

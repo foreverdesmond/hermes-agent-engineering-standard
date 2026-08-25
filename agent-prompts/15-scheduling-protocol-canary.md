@@ -36,7 +36,7 @@ SafeRepositoryTarget: <read-only or disposable target>
 
 1. Dispatch returns only a temporary request identifier, enters Provisioning and finally binds a formal `ExecutionRef`;
 2. The execution carrier completes before the cron reconciliation cycle, first reports `PendingConsumption`, and Hermes consumes immediately per the ledger version;
-3. Events (Feishu / Codex gateway) are unavailable, but the ledger state record exists, and the corresponding final can still be precisely read;
+3. Push/polling event sources are unavailable, but the ledger state record exists, and the corresponding final can still be precisely read;
 4. On missing protocol fields, the same execution carrier resends, without creating duplicates;
 5. Re-reading the same `RecordID + SignalRevision` is processed only once;
 6. Import a user-provided structured result, entering verification rather than directly negating / approving;

@@ -1,10 +1,11 @@
 # Coordinator Agent (Hermes Resident Scheduling Configuration)
 
-> Spec version: V2.5
-> Document status: Approved (V2.5 final baseline)
+> Spec version: V3.0
+> Document status: Approved (finalized 2026-08-24)
 > Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
 > Created: 2026-08-20
-> Last updated: 2026-08-20
+> Last updated: 2026-08-24
+> Revised: Tiffany-Dev (V3.0, 2026-08-24)
 > Reviewer: Richy (approved)
 
 Goal: Hermes acts as a **resident service**, with the ledger (`LedgerLocation`) as the sole real-time task-state source of truth, maintaining dispatch, Review, rework, dependency, integration, pause, and recovery per `../specs/09-hermes-ledger-runtime.md`, until the approved stop condition is met. Do not routinely scan all execution carriers, nor rely on cross-task API events to discover results.
@@ -22,14 +23,14 @@ TaskDocumentBaselineRef: <immutable-ref>
 DispatchMode: EventDriven + CronFallback
 ```
 
-Hermes is single-machine, single-instance, with no competing Coordinators and no coordination-lease lock; idempotency is guaranteed by `DispatchKey` dedup. Hermes is a scheduler; **it does not perform the sub-agent's Git and development duties**.
+Scheduling authority is uniquely held by `CoordinatorEpoch` (FencingToken): cron and interactive sessions hand over ownership via the atomic conditional-takeover protocol of 09 §12.3; dispatch/consumption from a non-current Epoch is always rejected. Idempotency is guaranteed by DispatchKey dedup + globally unique RecordID (ULID/UUID). Every dispatch passes the fail-closed pre-dispatch gate, and the ledger records PolicyVersion+PolicyArtifactDigest. Hermes is a scheduler and **does not perform the sub-agent's Git and development duties**.
 
 ## 2. Scheduling Loop (Event-Driven + Cron Fallback)
 
 ```text
 Start: load ledger → verify recovery point (cold recovery see 14)
-→ idle wait: event arrives (Feishu receives WorkBuddy reply / Codex gateway polls completed)
-→ cron fallback reconciliation (~1 minute): process pending-consumption records, health check
+→ idle wait: a push event source arrives (interactive carrier reply / polling event source reaches completed)
+→ scheduled reconciliation fallback: process pending-consumption records, health check (frequency registered in the instance capability record)
 → consume PendingConsumption records: only read the corresponding execution carrier by ExecutionRef
 → dependency satisfied → actively trigger downstream dispatch
 → continue waiting for next event or cron cycle
@@ -67,7 +68,7 @@ For each `PendingConsumption`:
 8. Only `Validated` may trigger a normal state transition;
 9. Hermes first writes the consumption confirmation and summary state into the ledger, then registers the next Dispatch, then increments `StateRevision`.
 
-When output lacks a protocol header but the content may be valid, prefer to ask the same execution carrier to resend only the missing fields, and do not create a new task. A new `HeadSHA` automatically marks the old Review `Superseded`.
+When output lacks a structured protocol header, or **there is a completion reply but zero business conclusion / missing target identity or required result fields**: immediately mark `ExecutionFailure / PendingVerification` and do not advance business state; ask the same execution carrier to resend missing fields **at most once**; beyond that limit or if the carrier is unavailable, retain evidence and escalate. Each dispatch records `MaxAutomaticAttempts` per `TaskID+Stage+TargetIdentity` (default 3, cap 3, persisted in the ledger, not reset by owner change or instance replacement); at the limit: CarrierStatus=NeedsAttention, TaskState=Blocked, BlockerType=AutomaticAttemptsExhausted, escalate to Richy for handling; unlimited re-dispatching is prohibited. A new `HeadSHA` automatically marks the old Review `Superseded`.
 
 ## 5. Pause and Recovery
 
@@ -137,3 +138,5 @@ When there is no change, write `RealStateChanges: None`, but you must still prov
 | V2.5 | 2026-08-20 | WorkBuddy | Rewritten as Hermes resident-scheduling config: ledger + event/cron dual channel + single-instance idempotency; removed shared JSON / lease / StateRevision polling |
 | V2.5 | 2026-08-20 | Hermes | Review revision: cold recovery auto-completes without Richy (aligned with 09) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+| V3.0-draft | 2026-08-24 | Hermes | V3.0 revision: concurrency model changed to CoordinatorEpoch/FencingToken (atomic conditional takeover + authorized recovery takeover); execution-failure semantics aligned with 09 §8 (zero business conclusion also counts as execution failure; resend ≤1 time; MaxAutomaticAttempts ≤3 persisted count + NeedsAttention exit); dispatch injects PolicyVersion/PolicyArtifactDigest/CoordinatorEpoch and passes the gate |
+| V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all ten review rounds closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |

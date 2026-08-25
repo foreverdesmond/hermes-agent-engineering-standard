@@ -27,7 +27,7 @@ Must:
 - Check whether task state, commit binding, evidence, and reconciliation rules are executable.
 - Check whether the pre-dispatch mandatory checklist, ledger state production/consumption, event + cron reconciliation, interruption gate, and Review-loop escalation are executable;
 - Check whether the unique `LedgerLocation`, `CanonicalTaskDocumentPath`, and Schema are explicit, the ledger is not in Git, `TASK-STATE-EXCHANGE` is the persistent snapshot, idempotent `DispatchKey`, pause, three-tier recovery (hot/cold/disaster), and applicable Canary are executable;
-- Check whether the designated execution mechanism (WorkBuddy/Codex/Human) cannot be substituted without authorization (no pseudo-independent self-review);
+- Check that the execution mechanism designated by the policy artifact cannot be substituted without authorization (no pseudo-independent self-review);
 - Check whether the schedule includes Review, expected rework, iteration integration, system verification, evidence, and human gates.
 
 Output:

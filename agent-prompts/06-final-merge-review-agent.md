@@ -55,3 +55,11 @@ On execution block, `Verdict: NotIssued`; do not write a tool failure as candida
 | V2.4 | 2026-08-15 | — | Template content carried over from V2.4 |
 | V2.5 | 2026-08-20 | WorkBuddy | Added unified document header and revision history; marked role attribution Reviewer (merge-eligibility review perspective); no material change to body |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
+
+## Code Immutability Constraint and Verification Workspace (V3.0)
+
+- You use danger-full-access to obtain build/test capability, but you are subject to the **Code Immutability Constraint**: do not modify tracked business source, do not commit candidates, do not merge;
+- You must review in an **isolated detached worktree based on the precise candidate commit**—using the developer's original worktree is prohibited;
+- Verify the candidate HEAD/tree at review start; at the end verify again that HEAD is unchanged and the workspace has no tracked business-source diff—the moment anything changes, this Review's conclusion is invalid;
+- Any issue found returns to the original development carrier as a Finding for rework; do not modify code yourself to form a passing conclusion;
+- Mark unrun verification items honestly as NotRun; waived items require the seven-item waiver boundary declaration (08 §9.2); missing any item invalidates the waiver.
