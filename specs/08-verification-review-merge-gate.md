@@ -1,10 +1,10 @@
 # Verification, Code Review & Merge-Gate Spec
 
-> Spec version: V2.5
-> Document status: Approved (V2.5 final baseline)
+> Spec version: V3.0
+> Document status: Approved (V2.5 is the previous baseline; finalized 2026-08-24, Richy final review passed)
 > Applicability: all development tasks needing code Review, integration verification, branch merge, or real-environment acceptance
-> Author: WorkBuddy (delegated by the Coordinator—implemented by Hermes)
-> Revised: 2026-08-21
+> Author: Tiffany-Dev (V3.0 revision; initial version = WorkBuddy)
+> Revised: 2026-08-24
 > Reviewer: Richy (approved)
 
 ## 1. Purpose
@@ -27,7 +27,7 @@ Projects may use trunk-based, short-lived branches, release branches, feature fl
 ### 2.1 Git Permission Boundary
 
 - Development and rework may only create commits on their own task branch;
-- Coding Reviewer, System Reviewer, and final merge Reviewer are read-only;
+- Coding Reviewer, System Reviewer, and final merge Reviewer are subject to the **Code Immutability Constraint**: unified use of danger-full-access to obtain build and test capability, but they must not modify tracked business source, must not commit candidates, and must not merge; execution must be in an isolated detached verification workspace based on the precise candidate commit; verify the candidate's HEAD/tree two-way before and after review—any change invalidates that Review conclusion (see 09 §7.3);
 - Only an independent iteration-integration task may merge the precise `TaskAccepted` commit into the iteration development branch;
 - Only an independent main-branch merge task may merge the precise candidate into the main branch after `MergeApproved` and explicit authorization;
 - A Reviewer must not also be the merge executor for the same candidate; any action entering the shared iteration, long-term integration, or main branch is executed by an independent merge task.
@@ -111,7 +111,15 @@ Level 1 is not proof that the production external environment passes. It allows 
 
 Verify production-form entry, config, Scope, concurrency, persistence call chain, and key system behavior on the project-designated integration candidate.
 
-### 5.2 Execution Mode
+### 5.2 Execution Mode (V3.0: clean-checkout homomorphic gate)
+
+L2 verification must be executed on an **independent detached worktree** checking out the **precise candidate commit**, and must not reuse any developer worktree (protecting its uncommitted content, and also ensuring the verification environment is homomorphic with the delivery environment):
+
+- After checkout and before and after testing, the candidate's **entire tracked content** (business source, config, project files, test assets) must remain zero-change—the verification process may only produce untracked test artifacts that are cleaned up in a controlled way;
+- Ignored host-config-type dependencies must declare a **reproducible controlled fallback source** (such as a sanitized sample template versioned with the repository); without a controlled fallback source, form an explicit "environment/config blocker" record (with a responsible owner) and escalate to the project owner; do not keep blindly retrying;
+- Test artifacts may be cleaned up in a controlled way; real external dependencies (production DB/storage, external credentials, real APIs) are out of scope at this level; anything not run is `NotRun`.
+
+#### 5.2.1 Execution Options
 
 The project may choose manual, semi-automatic, or automatic. Default recommendation: the Agent prepares config and steps, the project owner authorizes and executes, the Agent analyzes logs and evidence.
 
@@ -222,7 +230,9 @@ Choose the minimal test scope by change type:
 
 A known baseline failure must be registered with test, first evidence, impact judgment, and owner. When the candidate does not touch the relevant path, the baseline may be referenced; do not re-investigate every round; when this change may affect that failure, re-verify.
 
-## 9. NotRun and Exceptions
+## 9. NotRun, Exceptions, and Waiver Boundaries (V3.0 extension)
+
+### 9.1 NotRun Record Requirements
 
 Each `NotRun` must record:
 
@@ -235,6 +245,27 @@ Each `NotRun` must record:
 - Exception approver and time.
 
 Lack of environment does not automatically lower the acceptance level. The project owner may accept risk, but it must not be rewritten as `Passed`.
+
+### 9.2 Waiver Boundary Declaration (V3.0 new)
+
+The dispatch of a verification-class task must include a **waiver boundary declaration**, explicitly listing the failure modes at this verification level that are "known to exist but ruled by the project owner not to block this level's conclusion." Each waiver must satisfy the complete seven-item tuple; missing any item makes the waiver invalid:
+
+| # | Field | Description |
+|---|---|---|
+| 1 | Command/scenario | The precise command or verification scenario that triggers the failure |
+| 2 | Failure signature or missing dependency | Precise error signature (including error code + context); using only a generic error code is prohibited |
+| 3 | Impact scope | The components/paths affected by the failure, and the parts explicitly unaffected |
+| 4 | Risk | Issues that may be missed after waiving |
+| 5 | Alternative evidence | What other evidence compensates for this unverified item |
+| 6 | Authorizer | Project owner (Richy) + date |
+| 7 | Expiry candidate identity | The candidate SHA this waiver is bound to; if the candidate changes, it expires and must be re-adjudicated |
+
+Rules:
+
+- A generic error code must not alone serve as a waiver signature (V5 lesson: MSB3030 appeared both for missing host config and for macOS signing issues—the same error code with different root causes);
+- **Unified status model (V4 correction, Codex pointed out the status-enumeration conflict)**: a pass with valid waivers is recorded as `VerifiedWithWaivers` (new state, added to all state tables and template Status enumerations); `Verified` means full passage without any waiver. Both are passing conclusions, but `VerifiedWithWaivers` does not satisfy gates requiring "no waivers" (such as checklist closure before FINAL-REVIEW);
+- The existing "must not be rewritten as `Passed`" rule remains: `Passed` is used only in no-waiver scenarios (or as a colloquial equivalent of Verified);
+- Waivers are adjudicated item by item by the project owner and recorded in the runtime ledger; the verification executor must not expand the waiver scope on its own.
 
 ## 10. Risk Adaptation
 
@@ -314,3 +345,6 @@ This spec may be used for the iteration's merge judgment only when the project h
 | V2.5 (pending review) | 2026-08-20 | Hermes | §3.4 added IntegrationVerified triggered by Integrator reporting integration-check results; §4.2 added candidate-freeze human-gated event (Richy freezes → Hermes auto-dispatches Level 1, consistent with 09 §6.1) |
 | V2.5 final | 2026-08-20 | WorkBuddy | Reviewed and approved, marked as official V2.5 baseline |
 | V2.5 errata | 2026-08-21 | WorkBuddy | Synced source errata bd6a71f: heading-level, wording, and reconciliation-terminology fixes |
+| V2.5 errata 2 | 2026-08-22 | Hermes | §3.4 adds that `Integrated` requires merging the precise HeadSHA into the **current iteration branch with push succeeding**; a local-only/integration branch must not count as Integrated; downstream CodeBaseSHA must be obtainable from the current iteration branch (traceback: SCRAPER-V5-INT-CTX-002 missing unpushed baseline) |
+| V3.0-draft | 2026-08-24 | Hermes | V3.0 revision (proposal v5): ① §2.1 Reviewer "read-only" changed to "Code Immutability Constraint"—unified danger-full-access (build/test needs write permission), isolated detached verification workspace + before-and-after HEAD/tree two-way reconciliation, any change invalidates the conclusion; ② new §5.2 clean-checkout homomorphic gate: L2 must verify on an independent detached worktree of the precise candidate commit; gitignore dependencies must declare a reproducible controlled fallback source, missing means environment-blocker escalation; ③ new §9.2 waiver boundary declaration seven-item tuple (command scenario / failure signature / impact scope / risk / alternative evidence / authorizer / expiry candidate identity), generic error codes forbidden as sole waivers; passes with valid waivers recorded VerifiedWithWaivers |
+| V3.0 final | 2026-08-24 | Tiffany-Dev | Richy announced overall V3.0 approval: headers raised to V3.0/Approved; all ten review rounds (proposal v1-v5 plus nine body rounds) closed; D0/D1 residue-zero acceptance achieved; evidence pack E1-E8 and Canary 11/11 archived |
